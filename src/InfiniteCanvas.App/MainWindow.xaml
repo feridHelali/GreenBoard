@@ -1,0 +1,66 @@
+﻿<Window x:Class="InfiniteCanvas.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:InfiniteCanvas.App"
+        mc:Ignorable="d"
+        Title="GreenBoard - Canvas Infini" Height="900" Width="1400">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="50"/>
+            <!-- Barre d'outils -->
+            <RowDefinition Height="*"/>
+            <!-- Zone du Canvas -->
+        </Grid.RowDefinitions>
+
+        <!-- BARRE D'OUTILS (Toolbar) -->
+        <Border Grid.Row="0" Background="#F0F0F0" BorderBrush="#D0D0D0" BorderThickness="0,0,0,1" Padding="5">
+            <StackPanel Orientation="Horizontal">
+                <!-- Modes -->
+                <RadioButton x:Name="BtnPen" Content="Main Libre" IsChecked="True" Style="{StaticResource ToggleButtonStyle}" Click="SetPenMode"/>
+                <RadioButton x:Name="BtnEraser" Content="Gomme" Style="{StaticResource ToggleButtonStyle}" Click="SetEraserMode"/>
+
+                <Separator Margin="10,0"/>
+
+                <!-- Formes géométriques -->
+                <Button Content="Rectangle" Click="AddRectangle" Margin="5,0"/>
+                <Button Content="Ellipse" Click="AddEllipse" Margin="5,0"/>
+                <Button Content="Triangle" Click="AddTriangle" Margin="5,0"/>
+
+                <Separator Margin="10,0"/>
+
+                <!-- Vos 4 Couleurs de Stylet -->
+                <Button Width="25" Height="25" Background="Black" Click="SelectColor" Tag="#000000" Margin="2,0"/>
+                <Button Width="25" Height="25" Background="Red" Click="SelectColor" Tag="#FF0000" Margin="2,0"/>
+                <Button Width="25" Height="25" Background="Blue" Click="SelectColor" Tag="#0000FF" Margin="2,0"/>
+                <Button Width="25" Height="25" Background="Green" Click="SelectColor" Tag="#008000" Margin="2,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ZONE DE CANVAS INFINI -->
+        <!-- Nous utilisons une grille qui intercepte la molette de la souris pour le zoom -->
+        <Grid Grid.Row="1" x:Name="CanvasContainer" ClipToBounds="True"
+              MouseWheel="CanvasContainer_MouseWheel"
+              MouseDown="CanvasContainer_MouseDown"
+              MouseMove="CanvasContainer_MouseMove"
+              MouseUp="CanvasContainer_MouseUp">
+
+            <!-- Le conteneur qui subit les transformations de Zoom et Pan -->
+            <Canvas x:Name="MainCanvas" Width="5000" Height="5000" Background="White">
+                <Canvas.RenderTransform>
+                    <TransformGroup>
+                        <TranslateTransform x:Name="ControlTranslate"/>
+                        <ScaleTransform x:Name="ControlScale" ScaleX="1" ScaleY="1"/>
+                    </TransformGroup>
+                </Canvas.RenderTransform>
+
+                <!-- Le composant de capture d'encre natif de Microsoft -->
+                <InkCanvas x:Name="MyInkCanvas"
+                           Background="Transparent"
+                           Width="{Binding ElementName=MainCanvas, Path=Width}"
+                           Height="{Binding ElementName=MainCanvas, Path=Height}"/>
+            </Canvas>
+        </Grid>
+    </Grid>
+</Window>

@@ -1,0 +1,11 @@
+# Normalize line endings: store LF in the repo, check out per platform.
+* text=auto
+
+# Binary assets - never diff or line-ending-normalize these.
+*.docx binary
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.zip binary
