@@ -29,6 +29,10 @@ coverage*.json
 coverage*.xml
 coverage*.info
 
+## Installateur (artefacts générés par installer\build-installer.ps1)
+installer/publish/
+dist/
+
 ## OS
 Thumbs.db
 .DS_Store

@@ -31,8 +31,25 @@ dotnet run   --project src\InfiniteCanvas.App\InfiniteCanvas.App.csproj
 
 Everything builds and the test suite is green (real tests live in `InfiniteCanvas.App.Tests`; the Core and
 Infrastructure test projects still only hold template `UnitTest1` stubs).
-A running `InfiniteCanvas.App.exe` locks its output — close it before rebuilding the App or its tests. The
-same applies to `InfiniteCanvas.Mcp.exe` while an MCP client (Claude Code/Desktop) has it running.
+The App project's `AssemblyName` is `GreenBoard` (exe `GreenBoard.exe`, version/icon in its csproj); the
+namespace stays `InfiniteCanvas.App`. A running `GreenBoard.exe` locks its output — close it before rebuilding
+the App or its tests. The same applies to `InfiniteCanvas.Mcp.exe` while an MCP client has it running.
+
+## Installer / release
+
+```powershell
+pwsh -File installer\build-installer.ps1   # tests → self-contained win-x64 publish → Inno Setup
+```
+
+- Output: `dist\GreenBoard-Setup-<Version>.exe` (version read from `InfiniteCanvas.App.csproj`). `dist/` and
+  `installer/publish/` are git-ignored. Needs Inno Setup 6 (`winget install JRSoftware.InnoSetup`).
+- `installer\GreenBoard.iss`: per-user install without admin (`PrivilegesRequired=lowest`, `{autopf}`), FR/EN,
+  optional `mcp` component (installed to `{app}\mcp`, writes `LISEZ-MOI-MCP.txt` with the real path),
+  `.gboard` association (task `assoc`, `HKA\Software\Classes`), closes/restarts a running GreenBoard on upgrade.
+  **Never change `AppId`** — upgrades and uninstall depend on it. Bump `<Version>` for each release.
+- `GreenBoard.exe "<file>.gboard"` opens the file (`OpenFromCommandLine`, called on `Loaded`).
+- Icon: `src\InfiniteCanvas.App\Assets\GreenBoard.ico`, regenerated with `pwsh -STA -File installer\make-icon.ps1`.
+- The setup exe is not code-signed: Windows SmartScreen warns on first run.
 There is no CI, no lint/format config, no `.editorconfig`, no `global.json`, no `Directory.Build.props` —
 SDK version is whatever is installed (9.0.101 on this machine). WPF means the App project only builds on
 Windows, and `dotnet run` opens a real window (do not launch it expecting a CLI to return).

@@ -6,6 +6,7 @@
         xmlns:local="clr-namespace:InfiniteCanvas.App"
         mc:Ignorable="d"
         Title="GreenBoard - Canvas Infini" Height="900" Width="1400"
+        Icon="Assets/GreenBoard.ico"
         Background="#F3F4F6"
         PreviewKeyDown="Window_PreviewKeyDown"
         PreviewKeyUp="Window_PreviewKeyUp"

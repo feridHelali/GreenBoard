@@ -113,6 +113,9 @@ public partial class MainWindow : Window
             ResetView();
             CanvasContainer.Focus();
 
+            // Double-clic sur un fichier .gboard (association installée) : GreenBoard.exe "chemin\tableau.gboard"
+            OpenFromCommandLine(Environment.GetCommandLineArgs().Skip(1));
+
             // Canal local pour le serveur MCP (illustrations générées par l'IA)
             _pipeServer = new BoardPipeServer(Dispatcher, HandleBoardRequest);
             _pipeServer.Start();
@@ -1032,6 +1035,23 @@ public partial class MainWindow : Window
         if (!ConfirmSaveChanges()) return;
         LoadDocument(new BoardDocument(
             [new BoardPageData(BoardFile.NewId(), "Page 1", new StrokeCollection(), [], _background, 1, 0, 0)], 0), null);
+    }
+
+    private void OpenFromCommandLine(IEnumerable<string> args)
+    {
+        string? path = args.FirstOrDefault(a =>
+            a.EndsWith(BoardFile.Extension, StringComparison.OrdinalIgnoreCase) && File.Exists(a));
+        if (path == null) return;
+
+        try
+        {
+            LoadDocument(BoardFile.Load(path), Path.GetFullPath(path));
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Impossible d'ouvrir « {Path.GetFileName(path)} » :\n{ex.Message}", AppName,
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void OpenBoard()

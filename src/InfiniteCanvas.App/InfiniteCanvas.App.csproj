@@ -11,6 +11,21 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+
+    <!-- Identité de l'application : exécutable GreenBoard.exe (l'espace de noms reste InfiniteCanvas.App) -->
+    <AssemblyName>GreenBoard</AssemblyName>
+    <RootNamespace>InfiniteCanvas.App</RootNamespace>
+    <ApplicationIcon>Assets\GreenBoard.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
+    <Product>GreenBoard</Product>
+    <Company>GreenBoard</Company>
+    <Description>GreenBoard — tableau blanc infini pour l'enseignement</Description>
+    <Copyright>© 2026 GreenBoard</Copyright>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Icône aussi utilisée par les fenêtres (barre de titre, barre des tâches) -->
+    <Resource Include="Assets\GreenBoard.ico" />
+  </ItemGroup>
 
 </Project>
