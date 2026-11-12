@@ -5,53 +5,158 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:InfiniteCanvas.App"
         mc:Ignorable="d"
-        Title="GreenBoard - Canvas Infini" Height="900" Width="1400">
+        Title="GreenBoard - Canvas Infini" Height="900" Width="1400"
+        Background="#F3F4F6"
+        PreviewKeyDown="Window_PreviewKeyDown"
+        PreviewKeyUp="Window_PreviewKeyUp"
+        PreviewMouseDown="Window_PreviewMouseDown"
+        PreviewMouseUp="Window_PreviewMouseUp"
+        Deactivated="Window_Deactivated"
+        Closing="Window_Closing">
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="50"/>
+            <RowDefinition Height="56"/>
             <!-- Barre d'outils -->
+            <RowDefinition Height="40"/>
+            <!-- Onglets des pages -->
             <RowDefinition Height="*"/>
             <!-- Zone du Canvas -->
         </Grid.RowDefinitions>
 
         <!-- BARRE D'OUTILS (Toolbar) -->
-        <Border Grid.Row="0" Background="#F0F0F0" BorderBrush="#D0D0D0" BorderThickness="0,0,0,1" Padding="5">
-            <StackPanel Orientation="Horizontal">
-                <!-- Modes -->
-                <RadioButton x:Name="BtnPen" Content="Main Libre" IsChecked="True" Style="{StaticResource ToggleButtonStyle}" Click="SetPenMode"/>
-                <RadioButton x:Name="BtnEraser" Content="Gomme" Style="{StaticResource ToggleButtonStyle}" Click="SetEraserMode"/>
+        <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource DividerBrush}" BorderThickness="0,0,0,1"
+                Panel.ZIndex="1">
+            <Grid Margin="12,0">
+                <!-- Fichier à gauche, outils centrés dans l'espace restant, historique + zoom à droite : jamais de chevauchement -->
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
 
-                <Separator Margin="10,0"/>
+                <!-- Logo -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="26" Height="26" CornerRadius="7" Background="{StaticResource AccentBrush}">
+                        <Viewbox Width="16" Height="16">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="{StaticResource IconPen}" Stroke="White" StrokeThickness="2.2"
+                                      StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                            </Canvas>
+                        </Viewbox>
+                    </Border>
+                    <TextBlock Text="GreenBoard" Margin="8,0,0,0" FontSize="15" FontWeight="SemiBold"
+                               Foreground="#1F2937" VerticalAlignment="Center"/>
 
-                <!-- Formes géométriques -->
-                <Button Content="Rectangle" Click="AddRectangle" Margin="5,0"/>
-                <Button Content="Ellipse" Click="AddEllipse" Margin="5,0"/>
-                <Button Content="Triangle" Click="AddTriangle" Margin="5,0"/>
+                    <Rectangle Style="{StaticResource ToolbarDivider}" Margin="14,0,8,0"/>
 
-                <Separator Margin="10,0"/>
+                    <!-- Fichier -->
+                    <Button Content="{StaticResource IconNew}" Style="{StaticResource IconButtonStyle}" Click="New_Click" ToolTip="Nouveau tableau (Ctrl N)"/>
+                    <Button Content="{StaticResource IconOpen}" Style="{StaticResource IconButtonStyle}" Click="Open_Click" ToolTip="Ouvrir… (Ctrl O)"/>
+                    <Button Content="{StaticResource IconSave}" Style="{StaticResource IconButtonStyle}" Click="Save_Click" ToolTip="Enregistrer (Ctrl S) — Maj+clic : Enregistrer sous…"/>
+                    <Button Content="{StaticResource IconImage}" Style="{StaticResource IconButtonStyle}" Click="ImportImage_Click" ToolTip="Importer une image PNG / JPEG… (ou glisser-déposer, Ctrl V)"/>
+                    <Button Content="{StaticResource IconExport}" Style="{StaticResource IconButtonStyle}" Click="Export_Click" ToolTip="Exporter en PNG, JPEG, SVG ou PDF… (Ctrl E)"/>
+                    <Button Content="{StaticResource IconShare}" Style="{StaticResource IconButtonStyle}" Click="Share_Click" ToolTip="Partager par e-mail en PDF… (Ctrl Maj E)"/>
+                </StackPanel>
 
-                <!-- Vos 4 Couleurs de Stylet -->
-                <Button Width="25" Height="25" Background="Black" Click="SelectColor" Tag="#000000" Margin="2,0"/>
-                <Button Width="25" Height="25" Background="Red" Click="SelectColor" Tag="#FF0000" Margin="2,0"/>
-                <Button Width="25" Height="25" Background="Blue" Click="SelectColor" Tag="#0000FF" Margin="2,0"/>
-                <Button Width="25" Height="25" Background="Green" Click="SelectColor" Tag="#008000" Margin="2,0"/>
-            </StackPanel>
+                <!-- Outils -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center"
+                            Margin="8,0" ClipToBounds="True">
+                    <RadioButton x:Name="BtnSelect" Tag="Select" Content="{StaticResource IconSelect}" Style="{StaticResource ToggleButtonStyle}" Checked="Tool_Checked" ToolTip="Sélection (V)"/>
+                    <RadioButton x:Name="BtnPen" Tag="Pen" Content="{StaticResource IconPen}" Style="{StaticResource ToggleButtonStyle}" Checked="Tool_Checked" ToolTip="Main libre (P)"/>
+                    <RadioButton x:Name="BtnEraser" Tag="Eraser" Content="{StaticResource IconEraser}" Style="{StaticResource ToggleButtonStyle}" Checked="Tool_Checked" ToolTip="Gomme (E)"/>
+                    <RadioButton x:Name="BtnPan" Tag="Pan" Content="{StaticResource IconPan}" Style="{StaticResource ToggleButtonStyle}" Checked="Tool_Checked" ToolTip="Déplacer la vue (H) — ou maintenir Espace + clic gauche"/>
+
+                    <Rectangle Style="{StaticResource ToolbarDivider}"/>
+
+                    <RadioButton x:Name="BtnRectangle" Tag="Rectangle" Content="{StaticResource IconRectangle}" Style="{StaticResource ToggleButtonStyle}" Checked="Tool_Checked" ToolTip="Rectangle (R) — Maj pour un carré"/>
+                    <RadioButton x:Name="BtnEllipse" Tag="Ellipse" Content="{StaticResource IconEllipse}" Style="{StaticResource ToggleButtonStyle}" Checked="Tool_Checked" ToolTip="Ellipse (O) — Maj pour un cercle"/>
+                    <RadioButton x:Name="BtnTriangle" Tag="Triangle" Content="{StaticResource IconTriangle}" Style="{StaticResource ToggleButtonStyle}" Checked="Tool_Checked" ToolTip="Triangle (T)"/>
+                    <RadioButton x:Name="BtnLine" Tag="Line" Content="{StaticResource IconLine}" Style="{StaticResource ToggleButtonStyle}" Checked="Tool_Checked" ToolTip="Ligne (L) — Maj pour 45°"/>
+                    <RadioButton x:Name="BtnArrow" Tag="Arrow" Content="{StaticResource IconArrow}" Style="{StaticResource ToggleButtonStyle}" Checked="Tool_Checked" ToolTip="Flèche (A) — Maj pour 45°"/>
+
+                    <Rectangle Style="{StaticResource ToolbarDivider}"/>
+
+                    <!-- Couleurs du stylet et des formes -->
+                    <RadioButton x:Name="ColorBlack" Background="#1F2328" Tag="#1F2328" Style="{StaticResource ColorSwatchStyle}" Checked="Color_Checked" ToolTip="Noir" IsChecked="True"/>
+                    <RadioButton x:Name="ColorWhite" Background="#FFFFFF" Tag="#FFFFFF" Style="{StaticResource ColorSwatchStyle}" Checked="Color_Checked" ToolTip="Blanc (craie)"/>
+                    <RadioButton Background="#E53935" Tag="#E53935" Style="{StaticResource ColorSwatchStyle}" Checked="Color_Checked" ToolTip="Rouge"/>
+                    <RadioButton Background="#1E63D6" Tag="#1E63D6" Style="{StaticResource ColorSwatchStyle}" Checked="Color_Checked" ToolTip="Bleu"/>
+                    <RadioButton Background="#2E9D47" Tag="#2E9D47" Style="{StaticResource ColorSwatchStyle}" Checked="Color_Checked" ToolTip="Vert"/>
+                    <RadioButton Background="#F6C324" Tag="#F6C324" Style="{StaticResource ColorSwatchStyle}" Checked="Color_Checked" ToolTip="Jaune"/>
+
+                    <Rectangle Style="{StaticResource ToolbarDivider}"/>
+
+                    <!-- Choix de l'arrière-plan -->
+                    <ToggleButton x:Name="BtnBackground" Content="{StaticResource IconBackground}" Style="{StaticResource IconToggleStyle}" ToolTip="Arrière-plan"/>
+                    <Popup x:Name="BackgroundPopup" PlacementTarget="{Binding ElementName=BtnBackground}" Placement="Bottom"
+                           VerticalOffset="6" HorizontalOffset="-120" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
+                           IsOpen="{Binding IsChecked, ElementName=BtnBackground, Mode=TwoWay}"
+                           Opened="BackgroundPopup_Opened" Closed="BackgroundPopup_Closed">
+                        <Border Background="White" CornerRadius="10" Padding="12" Margin="4,0,16,16"
+                                BorderBrush="{StaticResource DividerBrush}" BorderThickness="1">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.18"/>
+                            </Border.Effect>
+                            <StackPanel>
+                                <TextBlock Text="Arrière-plan" FontWeight="SemiBold" Foreground="#1F2937" Margin="4,0,0,8"/>
+                                <UniformGrid x:Name="BackgroundChoices" Columns="3"/>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
+
+                    <Button Content="{StaticResource IconClear}" Style="{StaticResource IconButtonStyle}" Click="ClearBoard" ToolTip="Tout effacer"/>
+                </StackPanel>
+
+                <!-- Zoom -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button x:Name="BtnUndo" Content="{StaticResource IconUndo}" Style="{StaticResource IconButtonStyle}" Click="Undo_Click" ToolTip="Annuler (Ctrl Z)" IsEnabled="False"/>
+                    <Button x:Name="BtnRedo" Content="{StaticResource IconRedo}" Style="{StaticResource IconButtonStyle}" Click="Redo_Click" ToolTip="Rétablir (Ctrl Y)" IsEnabled="False"/>
+
+                    <Rectangle Style="{StaticResource ToolbarDivider}"/>
+
+                    <Button Content="{StaticResource IconZoomOut}" Style="{StaticResource IconButtonStyle}" Click="ZoomOut_Click" ToolTip="Zoom arrière (Ctrl -)"/>
+                    <TextBlock x:Name="ZoomText" Text="100 %" MinWidth="52" TextAlignment="Center" VerticalAlignment="Center"
+                               Foreground="#3C4350" FontWeight="SemiBold"/>
+                    <Button Content="{StaticResource IconZoomIn}" Style="{StaticResource IconButtonStyle}" Click="ZoomIn_Click" ToolTip="Zoom avant (Ctrl +)"/>
+                    <Button Content="{StaticResource IconFit}" Style="{StaticResource IconButtonStyle}" Click="ResetView_Click" ToolTip="Réinitialiser la vue (Ctrl 0)"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ONGLETS DES PAGES (générés dans le code : RebuildTabs) -->
+        <Border Grid.Row="1" Background="#EEF0F3" BorderBrush="{StaticResource DividerBrush}" BorderThickness="0,0,0,1">
+            <DockPanel Margin="10,0,10,0" LastChildFill="True">
+                <!-- « + » toujours visible, même avec beaucoup d'onglets -->
+                <Button DockPanel.Dock="Left" Content="{StaticResource IconAdd}" Style="{StaticResource IconButtonStyle}"
+                        Click="AddPage_Click" ToolTip="Nouvelle page (Ctrl T)" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <ScrollViewer x:Name="TabsScroller" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
+                              PreviewMouseWheel="TabsScroller_PreviewMouseWheel">
+                    <StackPanel x:Name="TabsPanel" Orientation="Horizontal" VerticalAlignment="Bottom"/>
+                </ScrollViewer>
+            </DockPanel>
         </Border>
 
         <!-- ZONE DE CANVAS INFINI -->
-        <!-- Nous utilisons une grille qui intercepte la molette de la souris pour le zoom -->
-        <Grid Grid.Row="1" x:Name="CanvasContainer" ClipToBounds="True"
-              MouseWheel="CanvasContainer_MouseWheel"
-              MouseDown="CanvasContainer_MouseDown"
-              MouseMove="CanvasContainer_MouseMove"
-              MouseUp="CanvasContainer_MouseUp">
+        <!-- La grille intercepte molette / glisser pour le zoom et le déplacement ;
+             son arrière-plan (motif) suit la transformation de la vue. -->
+        <Grid Grid.Row="2" x:Name="CanvasContainer" ClipToBounds="True"
+              Focusable="True" FocusVisualStyle="{x:Null}"
+              Background="White"
+              AllowDrop="True" Drop="CanvasContainer_Drop"
+              PreviewMouseWheel="CanvasContainer_MouseWheel"
+              PreviewMouseDown="CanvasContainer_PreviewMouseDown"
+              PreviewMouseMove="CanvasContainer_PreviewMouseMove"
+              PreviewMouseUp="CanvasContainer_PreviewMouseUp"
+              LostMouseCapture="CanvasContainer_LostMouseCapture"
+              SizeChanged="CanvasContainer_SizeChanged">
 
-            <!-- Le conteneur qui subit les transformations de Zoom et Pan -->
-            <Canvas x:Name="MainCanvas" Width="5000" Height="5000" Background="White">
+            <!-- Le conteneur qui subit les transformations de Zoom et Pan (écran = monde × échelle + translation) -->
+            <Canvas x:Name="MainCanvas" Width="20000" Height="20000" Background="Transparent"
+                    HorizontalAlignment="Left" VerticalAlignment="Top">
                 <Canvas.RenderTransform>
                     <TransformGroup>
-                        <TranslateTransform x:Name="ControlTranslate"/>
                         <ScaleTransform x:Name="ControlScale" ScaleX="1" ScaleY="1"/>
+                        <TranslateTransform x:Name="ControlTranslate"/>
                     </TransformGroup>
                 </Canvas.RenderTransform>
 
@@ -59,7 +164,43 @@
                 <InkCanvas x:Name="MyInkCanvas"
                            Background="Transparent"
                            Width="{Binding ElementName=MainCanvas, Path=Width}"
-                           Height="{Binding ElementName=MainCanvas, Path=Height}"/>
+                           Height="{Binding ElementName=MainCanvas, Path=Height}"
+                           PreviewMouseLeftButtonDown="InkCanvas_PreviewMouseLeftButtonDown"
+                           PreviewMouseMove="InkCanvas_PreviewMouseMove"
+                           PreviewMouseLeftButtonUp="InkCanvas_PreviewMouseLeftButtonUp"
+                           SelectionMoving="InkCanvas_SelectionChanging"
+                           SelectionResizing="InkCanvas_SelectionChanging"
+                           SelectionMoved="InkCanvas_SelectionChangedGeometry"
+                           SelectionResized="InkCanvas_SelectionChangedGeometry"
+                           SelectionChanged="InkCanvas_SelectionChanged"/>
+            </Canvas>
+
+            <!-- Calque écran au-dessus de la feuille : poignée de rotation de la sélection (taille fixe quel que soit le zoom).
+                 Fond nul : seuls ses éléments captent la souris, le reste passe à la feuille. -->
+            <Canvas x:Name="OverlayCanvas">
+                <Line x:Name="RotateStem" Stroke="{StaticResource AccentBrush}" StrokeThickness="1.5"
+                      StrokeDashArray="3 2" IsHitTestVisible="False" Visibility="Collapsed"/>
+                <Border x:Name="RotateHandle" Width="28" Height="28" CornerRadius="14" Background="White"
+                        BorderBrush="{StaticResource AccentBrush}" BorderThickness="2" Cursor="Hand"
+                        Visibility="Collapsed" ToolTip="Faire pivoter — Maj : par pas de 15°"
+                        MouseLeftButtonDown="RotateHandle_MouseLeftButtonDown"
+                        MouseMove="RotateHandle_MouseMove"
+                        MouseLeftButtonUp="RotateHandle_MouseLeftButtonUp"
+                        LostMouseCapture="RotateHandle_LostMouseCapture">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="6" ShadowDepth="1" Opacity="0.25"/>
+                    </Border.Effect>
+                    <Viewbox Width="15" Height="15">
+                        <Canvas Width="24" Height="24">
+                            <Path Data="{StaticResource IconRotate}" Stroke="{StaticResource AccentBrush}" StrokeThickness="2.6"
+                                  StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Canvas>
+                    </Viewbox>
+                </Border>
+                <Border x:Name="AngleBadge" Background="#1F2937" CornerRadius="6" Padding="7,3"
+                        IsHitTestVisible="False" Visibility="Collapsed">
+                    <TextBlock x:Name="AngleText" Foreground="White" FontSize="12" FontWeight="SemiBold"/>
+                </Border>
             </Canvas>
         </Grid>
     </Grid>

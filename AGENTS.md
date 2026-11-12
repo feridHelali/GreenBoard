@@ -9,7 +9,11 @@ WPF + .NET 9, offline-first, with a cloud sync backend planned.
 - `src/InfiniteCanvas.App` — WPF UI. `net9.0-windows`, `UseWPF=true`, `OutputType=WinExe`.
 - `src/InfiniteCanvas.Core` — domain layer. `net9.0` (cross-platform).
 - `src/InfiniteCanvas.Infrastructure` — persistence. `net9.0`, references Core.
+- `src/InfiniteCanvas.Mcp` — MCP server (stdio), `net9.0` console, references Core. Packages:
+  `ModelContextProtocol` 2.3.1, `Microsoft.Extensions.Hosting` 10.0.15, `Svg.Skia` 5.2.2.
 - `tests/InfiniteCanvas.Core.Tests`, `tests/InfiniteCanvas.Infrastructure.Tests` — xUnit 2.9.2, `Microsoft.NET.Test.Sdk` 17.11.1, coverlet.collector 6.0.2.
+- `tests/InfiniteCanvas.App.Tests` — same xUnit stack, `net9.0-windows` + `UseWPF`; WPF work runs on an STA
+  thread via the `Sta(...)` helper (ink and `RenderTargetBitmap` fail on xUnit's MTA threads).
 - `designDocs/00_Inception/` — numbered phase folders; holds the authoritative spec + schema.
 
 Dependency direction is `App → Infrastructure → Core` (App references both Core and Infrastructure directly).
@@ -25,7 +29,10 @@ dotnet test  InfiniteCanvas.sln
 dotnet run   --project src\InfiniteCanvas.App\InfiniteCanvas.App.csproj
 ```
 
-Everything builds and the test suite is green (the only tests are the two template `UnitTest1` stubs).
+Everything builds and the test suite is green (real tests live in `InfiniteCanvas.App.Tests`; the Core and
+Infrastructure test projects still only hold template `UnitTest1` stubs).
+A running `InfiniteCanvas.App.exe` locks its output — close it before rebuilding the App or its tests. The
+same applies to `InfiniteCanvas.Mcp.exe` while an MCP client (Claude Code/Desktop) has it running.
 There is no CI, no lint/format config, no `.editorconfig`, no `global.json`, no `Directory.Build.props` —
 SDK version is whatever is installed (9.0.101 on this machine). WPF means the App project only builds on
 Windows, and `dotnet run` opens a real window (do not launch it expecting a CLI to return).
@@ -38,13 +45,19 @@ commit `.docx` as text.
 ## File ownership in the App project (do not re-shuffle these)
 
 - `App.xaml` — **application-level resources only**: `<Application>` root, `StartupUri="MainWindow.xaml"`,
-  and `<Application.Resources>` holding the shared `ToggleButtonStyle` (used by the pen/eraser radio
-  buttons). No layout belongs here.
+  and `<Application.Resources>` holding the toolbar look: icon geometries (`Icon*` `PathGeometry`, 24×24
+  stroke-only grid), brushes, `ToggleButtonStyle` (tool radio buttons — `Content` is an icon geometry),
+  `IconButtonStyle` / `IconToggleStyle` (action buttons), `ColorSwatchStyle`, `ToolbarDivider`.
+  No layout belongs here.
 - `App.xaml.cs` — empty `App : Application` partial class. SDK-style WPF generates `App.g.cs` containing a
   `Main()` that calls `InitializeComponent()` itself, so **do not** add a manual `InitializeComponent()`
   call or an `OnStartup` override that calls it.
-- `MainWindow.xaml` / `MainWindow.xaml.cs` — the entire UI and all behaviour, namespace `InfiniteCanvas.App`.
-  `x:Class` and the code-behind namespace must stay in sync.
+- `MainWindow.xaml` / `MainWindow.xaml.cs` — the entire UI and its event handling, namespace
+  `InfiniteCanvas.App`. `x:Class` and the code-behind namespace must stay in sync.
+- Non-UI helpers next to it (all `public` so `InfiniteCanvas.App.Tests` can reach them):
+  `BoardBackgrounds.cs` (`BoardBackground` enum + brush factory shared by screen and export),
+  `BoardHistory.cs` (undo/redo), `BoardFile.cs` (`.gboard` save/load), `BoardExporter.cs` (PNG/JPEG/SVG/PDF),
+  `BoardPipeServer.cs` (named-pipe endpoint for the MCP server).
 
 ## WPF/XAML gotchas that will cost you build cycles
 
@@ -60,17 +73,74 @@ commit `.docx` as text.
 
 ## Prototype rendering model (the code that does exist, in `MainWindow.xaml.cs`)
 
-- `CanvasContainer` (Grid) intercepts mouse wheel / drag for zoom+pan; `MainCanvas` is a fixed 5000×5000
-  `Canvas` whose `RenderTransform` is a `TransformGroup` of `TranslateTransform ControlTranslate` +
-  `ScaleTransform ControlScale`. Infinite canvas is faked by transform, not by real unbounded space.
-- Zoom is clamped to scale 0.1–8.0 (10 %–800 %). The spec in the design doc says 10 %–1000 % — the
-  prototype deviates; treat the spec as the target.
-- Pan = right **or** middle mouse button drag, using `CaptureMouse`/`ReleaseMouseCapture`.
+- `CanvasContainer` (Grid) intercepts wheel / drag via **Preview** events for zoom+pan; `MainCanvas` is a
+  fixed 20000×20000 `Canvas` (top-left aligned) whose `RenderTransform` is `ScaleTransform ControlScale`
+  **then** `TranslateTransform ControlTranslate`, i.e. `screen = world × scale + translate` (translate is in
+  screen pixels). `ClampView()` keeps the sheet on screen; `ResetView()` centres it at 100 %.
+- Zoom is clamped to 0.1–10.0 (10 %–1000 %, per spec) and anchored on the cursor (`ZoomAt`).
+- Pan = hold **Space + left drag**, the Pan tool (H), or right/middle drag. While Space is held the
+  InkCanvas `EditingMode` is `None` so no stray ink is drawn.
 - Ink uses the native `System.Windows.Ink.InkCanvas` (`MyInkCanvas`), not SkiaSharp. `IgnorePressure=false`
   and `FitToCurve=true` are deliberate (XP-Pen stylus pressure + Bézier smoothing). Eraser is
   `InkCanvasEditingMode.EraseByStroke` (stroke eraser, not pixel eraser).
-- Shapes are added as raw `Rectangle`/`Ellipse`/`Polygon` children of `MyInkCanvas` at hardcoded
-  positions (250, 200) — no model, no selection tool, no undo yet.
+- Shapes (rectangle, ellipse, triangle, line, arrow) are drawn by dragging (Shift constrains) and are
+  **ordinary `Stroke`s** (polyline points, `FitToCurve=false`, `IgnorePressure=true`, tagged with the
+  `ShapeKindProperty` ISF property). That is deliberate: as WPF `Shape` children they could not be erased,
+  tap-selected or saved with the ink. Do not go back to `Shape` elements.
+- Images (imported PNG/JPEG, MCP illustrations) are `Image` children of `MyInkCanvas` whose `Tag` is a
+  `BoardItemTag(Id, Data, Label)`; position them with **`InkCanvas.SetLeft/SetTop`** (`Canvas.SetLeft` is
+  ignored by InkCanvas). Ink renders above them, so they can be annotated. The eraser does not touch them —
+  select + Delete instead.
+- Undo/redo (`BoardHistory`): stroke adds/removes are captured from `Strokes.StrokesChanged`; image
+  add/remove, selection move/resize (`SelectionMoving`→`SelectionMoved` snapshots) and recolouring are
+  recorded explicitly. Window-level left mouse down/up opens/closes a group so one gesture = one undo step.
+  After replacing `MyInkCanvas.Strokes` call `_history.Reset()`.
+- Pages (tabs): one `InkCanvas` serves every page. `ActivatePage` stores the outgoing page
+  (`StoreActivePage`: children → `Elements`, background, view), then swaps in the target's `Strokes`,
+  children, background, view and **its own `BoardHistory`** (`Detach`/`Attach`, not `Reset`). Anything that
+  reads all pages (save, export, MCP `get_board`) must call `StoreActivePage()` first or read the live canvas
+  for the active page. Tabs are rebuilt in code (`RebuildTabs`); a focused `TextBox` (tab rename) disables
+  all keyboard shortcuts in `Window_PreviewKeyDown`.
+- Rotation: InkCanvas Select mode only moves/resizes, so `OverlayCanvas` (screen space, null background,
+  above `MainCanvas`) hosts a rotation handle placed via `TranslatePoint` from the selection bounds. Dragging
+  re-applies `RotateAt` to a snapshot of the selected strokes (no drift); one undo step on release. Images
+  are not rotated. Call `UpdateRotateHandle()` after anything that moves the view or the selection.
+- Auto-placement: `AddImageItem` without x/y uses `FindFreeSpot` (no ink/image overlap, nearest the view
+  centre, else right of all content) and recentres the view if the item lands off-screen.
+- `.gboard` file = ZIP, version 3: `pages/<n>/ink.isf` (native Ink Serialized Format),
+  `pages/<n>/items/<i>.png|.jpg`, `board.json` (active page + per page: id, title, background, view, item
+  positions). Versions 1–2 (single page at the archive root) still load. Written to `<path>.tmp` then moved.
+- Export: PDF = every page (one PDF page each, empty page → A4 landscape); PNG/JPEG/SVG = active page only.
+- Share by e-mail (`MailShare.cs` + `Views/ShareWindow.xaml`): exports the PDF to
+  `%TEMP%\GreenBoard\Partage\`, then opens the user's mail client compose window via Simple MAPI
+  (`MAPISendMailW`, `MAPI_DIALOG` — the user reviews and sends; GreenBoard never sends mail or stores
+  credentials). MAPI blocks while the compose window is open on some clients, so it runs on a dedicated STA
+  thread. If MAPI is unavailable (new Outlook, webmail, no client): `mailto:` + Explorer with the PDF selected.
+  Last recipients are remembered in `%APPDATA%\GreenBoard\partage.json`. Do not add an SMTP sender without
+  a proper credential store.
+- Export (`BoardExporter`): content bounds + 40 margin. PNG/JPEG via `RenderTargetBitmap` at 2× (≤ 40 MP);
+  SVG and PDF are vector — stroke outlines come from `Stroke.GetGeometry()` flattened to polygons; the
+  background tile is re-emitted as an SVG `<pattern>` / PDF tiling pattern; PDF is hand-written (no library),
+  images as FlateDecode + SMask. Numbers are always formatted with `InvariantCulture` (French locale!).
+- Backgrounds (`BoardBackground` enum, 6 kinds) are a tiled `DrawingBrush` on `CanvasContainer`, rebuilt on
+  scale change (constant on-screen line width) and given the view matrix as its `Transform`, so the
+  pattern is infinite and follows pan/zoom.
+
+## MCP server (AI illustrations for teachers)
+
+- Flow: MCP client (Claude) → `InfiniteCanvas.Mcp.exe` over stdio → the model writes an SVG → `SvgRenderer`
+  (Svg.Skia) rasterises it at 3× → PNG sent to the running app over the named pipe
+  `GreenBoard.Board.v1` (`PipeOptions.CurrentUserOnly`) → `AddImageItem` places it.
+- Pipe protocol lives in Core (`Core/Models/BoardProtocol.cs`): one JSON line request, one JSON line
+  response; commands `get_board`, `add_image`, `remove_item`, `set_background`, `add_page`, `select_page`.
+  Everything acts on the active page.
+- Tools: `get_board`, `preview_svg` (render only, returns the image so the model can self-check),
+  `draw_svg`, `insert_image`, `remove_item`, `set_background`, `new_page`, `select_page`;
+  prompt `illustration_cours`.
+  Design rules for the model are in `DesignGuide.cs` (sent as server instructions).
+- `SvgRenderer` rejects external `href`/`url()`, `<script>`, DOCTYPE/ENTITY and `@import` — keep it that way.
+- stdout is the MCP channel: never `Console.WriteLine` in the Mcp project; logging goes to stderr.
+- Registered in Claude Code (local scope) as `greenboard` pointing at the Debug exe.
 
 ## Design docs
 
@@ -92,5 +162,5 @@ commit `.docx` as text.
 - All projects: `Nullable=enable`, `ImplicitUsings=enable`. Do not add redundant `using` directives for
   `System`, `System.Linq`, `System.Collections.Generic`.
 - Test projects declare `<Using Include="Xunit" />` — write `[Fact]` tests without `using Xunit;`.
-- `Class1.cs` (Core, Infrastructure) and `UnitTest1.cs` (both test projects) are untouched template stubs.
+- `Class1.cs` (Infrastructure) and `UnitTest1.cs` (Core/Infrastructure test projects) are untouched template stubs.
   Replace them when adding real code; do not treat them as meaningful.

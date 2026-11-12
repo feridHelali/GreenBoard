@@ -1,0 +1,117 @@
+<Window x:Class="InfiniteCanvas.App.Views.ShareWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Partager par e-mail" Width="520" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" ShowInTaskbar="False"
+        Background="White" FontSize="13">
+    <Window.Resources>
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#1F2937" />
+            <Setter Property="Margin" Value="0,14,0,5" />
+        </Style>
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#6B7280" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="7,5" />
+            <Setter Property="BorderBrush" Value="#D1D5DB" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="DialogButton" TargetType="Button">
+            <Setter Property="Padding" Value="16,7" />
+            <Setter Property="Margin" Value="8,0,0,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Background" Value="White" />
+            <Setter Property="Foreground" Value="#1F2937" />
+            <Setter Property="BorderBrush" Value="#D1D5DB" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1" CornerRadius="7" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.88" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource DialogButton}">
+            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+    </Window.Resources>
+
+    <Border Padding="24,20,24,20">
+        <StackPanel>
+            <!-- En-tête -->
+            <StackPanel Orientation="Horizontal">
+                <Border Width="34" Height="34" CornerRadius="9" Background="{StaticResource AccentSoftBrush}">
+                    <Viewbox Width="18" Height="18">
+                        <Canvas Width="24" Height="24">
+                            <Path Data="{StaticResource IconShare}" Stroke="{StaticResource AccentBrush}" StrokeThickness="2"
+                                  StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Canvas>
+                    </Viewbox>
+                </Border>
+                <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="Partager par e-mail" FontSize="17" FontWeight="SemiBold" Foreground="#1F2937"/>
+                    <TextBlock Style="{StaticResource Hint}"
+                               Text="Le tableau est exporté en PDF et joint à un nouveau message de votre messagerie."/>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Destinataires -->
+            <TextBlock Text="Destinataires" Style="{StaticResource FieldLabel}"/>
+            <TextBox x:Name="RecipientsBox" TextChanged="RecipientsBox_TextChanged" AcceptsReturn="False"/>
+            <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0"
+                       Text="Une ou plusieurs adresses, séparées par ; , ou un espace."/>
+            <WrapPanel x:Name="RecipientChips" Margin="0,6,0,0"/>
+            <TextBlock x:Name="RecentLink" Margin="0,4,0,0" FontSize="12" Visibility="Collapsed">
+                <Hyperlink Click="UseRecent_Click"><Run x:Name="RecentText"/></Hyperlink>
+            </TextBlock>
+
+            <!-- Objet et message -->
+            <TextBlock Text="Objet" Style="{StaticResource FieldLabel}"/>
+            <TextBox x:Name="SubjectBox"/>
+
+            <TextBlock Text="Message" Style="{StaticResource FieldLabel}"/>
+            <TextBox x:Name="BodyBox" Height="96" AcceptsReturn="True" TextWrapping="Wrap"
+                     VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto"/>
+
+            <!-- PDF -->
+            <TextBlock Text="Contenu du PDF" Style="{StaticResource FieldLabel}"/>
+            <StackPanel Orientation="Horizontal">
+                <RadioButton x:Name="AllPagesRadio" GroupName="Pages" IsChecked="True" Margin="0,0,18,0"/>
+                <RadioButton x:Name="CurrentPageRadio" GroupName="Pages"/>
+            </StackPanel>
+
+            <TextBlock Text="Nom du fichier" Style="{StaticResource FieldLabel}"/>
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Right" Text=".pdf" Foreground="#6B7280" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                <TextBox x:Name="FileNameBox"/>
+            </DockPanel>
+
+            <!-- Actions -->
+            <DockPanel Margin="0,22,0,0" LastChildFill="False">
+                <TextBlock DockPanel.Dock="Left" Style="{StaticResource Hint}" MaxWidth="230" VerticalAlignment="Center"
+                           Text="Vous relirez le message avant de l'envoyer."/>
+                <Button DockPanel.Dock="Right" x:Name="SendButton" Content="Préparer l'e-mail" Style="{StaticResource PrimaryButton}"
+                        IsDefault="True" IsEnabled="False" Click="Send_Click"/>
+                <Button DockPanel.Dock="Right" Content="Annuler" Style="{StaticResource DialogButton}" IsCancel="True"/>
+            </DockPanel>
+        </StackPanel>
+    </Border>
+</Window>
