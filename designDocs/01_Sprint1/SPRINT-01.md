@@ -49,7 +49,17 @@ En tant qu'enseignant, je veux brancher mon assistant IA sur GreenBoard sans lir
 - [x] Image générée par `installer\make-icon.ps1` (version lue dans le csproj), régénérée par `build-installer.ps1`
 - [x] La fenêtre principale s'ouvre agrandie (plein écran de travail)
 
-### S1-6 · Publication
+### S1-6 · Outil Texte (ajouté en cours de sprint)
+- [x] Outil Texte (X) : clic → saisie multiligne, Échap / Ctrl+Entrée / clic ailleurs pour terminer
+- [x] Clic sur un texte (ou double-clic avec la Sélection) pour le modifier ; couleur au choix pendant la saisie
+- [x] Déplacement, redimensionnement, suppression, annuler/rétablir comme les images
+- [x] Contours vectoriels : rendu identique en PNG, SVG et PDF ; format `.gboard` version 4
+- [x] Taille par défaut dans les Réglages ; aide et raccourcis à jour ; 5 tests
+
+### S1-7 · Guide du développeur
+- [x] `DEVELOPER.md` : outils, compilation, architecture, recettes, tests, installateur, publication, dépannage
+
+### S1-8 · Publication
 - [x] Installateur reconstruit (tests verts) avec l'éditeur Alfa Computers Apps
 - [x] Dépôt GitHub public `feridHelali/GreenBoard`, branche poussée
 - [x] Release `v1.0.0` avec `GreenBoard-Setup-1.0.0.exe` et son empreinte SHA-256

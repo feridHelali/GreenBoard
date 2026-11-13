@@ -71,6 +71,7 @@
                     <RadioButton x:Name="BtnTriangle" Tag="Triangle" Content="{StaticResource IconTriangle}" Style="{StaticResource ToggleButtonStyle}" Checked="Tool_Checked" ToolTip="Triangle (T)"/>
                     <RadioButton x:Name="BtnLine" Tag="Line" Content="{StaticResource IconLine}" Style="{StaticResource ToggleButtonStyle}" Checked="Tool_Checked" ToolTip="Ligne (L) — Maj pour 45°"/>
                     <RadioButton x:Name="BtnArrow" Tag="Arrow" Content="{StaticResource IconArrow}" Style="{StaticResource ToggleButtonStyle}" Checked="Tool_Checked" ToolTip="Flèche (A) — Maj pour 45°"/>
+                    <RadioButton x:Name="BtnText" Tag="Text" Content="{StaticResource IconText}" Style="{StaticResource ToggleButtonStyle}" Checked="Tool_Checked" ToolTip="Texte (X) — cliquez pour écrire, cliquez sur un texte pour le modifier"/>
 
                     <Rectangle Style="{StaticResource ToolbarDivider}"/>
 

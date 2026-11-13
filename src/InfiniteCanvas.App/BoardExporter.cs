@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
@@ -26,9 +26,11 @@ public static class BoardExporter
     public sealed record Item(BitmapSource Image, Rect Bounds, byte[] Data);
 
     /// <summary>Une page à exporter.</summary>
-    public sealed record Page(StrokeCollection Strokes, IReadOnlyList<Item> Items, BoardBackground Background)
+    public sealed record Page(StrokeCollection Strokes, IReadOnlyList<Item> Items, BoardBackground Background,
+        IReadOnlyList<BoardTextData>? Texts = null)
     {
-        public bool IsEmpty => Strokes.Count == 0 && Items.Count == 0;
+        public bool IsEmpty => Strokes.Count == 0 && Items.Count == 0 && TextList.Count == 0;
+        public IReadOnlyList<BoardTextData> TextList => Texts ?? [];
     }
 
     /// <summary>
@@ -60,6 +62,7 @@ public static class BoardExporter
 
         Rect b = page.Strokes.GetBounds(); // Rect.Empty s'il n'y a aucun trait
         foreach (var item in page.Items) b.Union(item.Bounds);
+        foreach (var text in page.TextList) b.Union(text.Bounds);
         b.Inflate(Margin, Margin);
         return new Rect(Math.Floor(b.X), Math.Floor(b.Y), Math.Ceiling(b.Width), Math.Ceiling(b.Height));
     }
@@ -84,6 +87,8 @@ public static class BoardExporter
             dc.DrawRectangle(BoardBackgrounds.CreateBrush(bg, factor), null, bounds);
             // Comme à l'écran : les images sous l'encre (on peut annoter une illustration)
             foreach (var item in items) dc.DrawImage(item.Image, item.Bounds);
+            // Textes : au-dessus des images, sous l'encre (comme à l'écran, où ils sont avant les traits)
+            foreach (var text in page.TextList) dc.DrawGeometry(new SolidColorBrush(text.Color), null, BoardText.PlacedGeometry(text));
             strokes.Draw(dc);
         }
 
@@ -128,6 +133,9 @@ public static class BoardExporter
             string mime = BoardFile.ImageExtension(item.Data) == ".jpg" ? "image/jpeg" : "image/png";
             sb.Append(Inv, $"<image x=\"{F(item.Bounds.X)}\" y=\"{F(item.Bounds.Y)}\" width=\"{F(item.Bounds.Width)}\" height=\"{F(item.Bounds.Height)}\" preserveAspectRatio=\"none\" href=\"data:{mime};base64,{Convert.ToBase64String(item.Data)}\"/>\n");
         }
+
+        foreach (var text in page.TextList)
+            sb.Append(Inv, $"<path d=\"{SvgPath(BoardText.PlacedGeometry(text))}\" fill=\"{Hex(text.Color)}\"/>\n");
 
         foreach (var stroke in strokes)
         {
@@ -203,6 +211,8 @@ public static class BoardExporter
             content.Append(Inv, $"q {F(r.Width)} 0 0 {F(-r.Height)} {F(r.X)} {F(r.Y + r.Height)} cm /Im{i + 1} Do Q\n");
         }
 
+        foreach (var text in page.TextList)
+            AppendPdfFill(content, BoardText.PlacedGeometry(text), text.Color);
         foreach (var stroke in strokes)
             AppendPdfFill(content, stroke.GetGeometry(), stroke.DrawingAttributes.Color);
 

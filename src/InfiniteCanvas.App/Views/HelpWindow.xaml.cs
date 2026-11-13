@@ -27,6 +27,9 @@ public partial class HelpWindow : Window
         new("IconRectangle", "Formes géométriques",
             "Rectangle, ellipse, triangle, ligne et flèche, tracés en glissant. Maj : carré, cercle ou angle multiple de 45°. " +
             "Les formes s'effacent et se sélectionnent comme l'encre."),
+        new("IconText", "Texte",
+            "Outil Texte (X) : cliquez et tapez ; Entrée pour une nouvelle ligne, Échap ou clic ailleurs pour terminer. " +
+            "Cliquez sur un texte (ou double-cliquez avec la Sélection) pour le modifier. Il se déplace, s'agrandit et s'exporte comme le reste."),
         new("IconSelect", "Sélection",
             "Entourez des traits pour les déplacer, les redimensionner, les faire pivoter avec la poignée ronde " +
             "(Maj : par pas de 15°), les recolorer ou les supprimer."),
@@ -58,7 +61,7 @@ public partial class HelpWindow : Window
         ("Outils",
         [
             new("V", "Sélection"), new("P", "Main libre"), new("E", "Gomme"), new("H", "Déplacer la vue"),
-            new("R", "Rectangle"), new("O", "Ellipse"), new("T", "Triangle"), new("L", "Ligne"), new("A", "Flèche"),
+            new("R", "Rectangle"), new("O", "Ellipse"), new("T", "Triangle"), new("L", "Ligne"), new("A", "Flèche"), new("X", "Texte"),
             new("Maj", "Pendant un tracé : carré, cercle ou angle de 45°")
         ]),
         ("Fichier",
@@ -70,6 +73,7 @@ public partial class HelpWindow : Window
         ("Édition",
         [
             new("Ctrl+Z", "Annuler"), new("Ctrl+Y / Ctrl+Maj+Z", "Rétablir"),
+            new("Échap / Ctrl+Entrée", "Terminer la saisie d'un texte"),
             new("Suppr / Retour", "Supprimer la sélection")
         ]),
         ("Pages",

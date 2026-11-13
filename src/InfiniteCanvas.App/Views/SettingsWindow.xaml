@@ -57,7 +57,12 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="34"/>
                     <RowDefinition Height="34"/>
+                    <RowDefinition Height="34"/>
                 </Grid.RowDefinitions>
+                <TextBlock Grid.Row="2" Text="Taille du texte" Style="{StaticResource RowLabel}"/>
+                <Slider x:Name="TextSlider" Grid.Row="2" Grid.Column="1" Minimum="12" Maximum="120" TickFrequency="2" IsSnapToTickEnabled="True"
+                        ValueChanged="Any_Changed"/>
+                <TextBlock x:Name="TextValue" Grid.Row="2" Grid.Column="2" Style="{StaticResource Value}"/>
                 <TextBlock Text="Épaisseur du stylet" Style="{StaticResource RowLabel}"/>
                 <Slider x:Name="PenSlider" Grid.Column="1" Minimum="1" Maximum="20" TickFrequency="0.5" IsSnapToTickEnabled="True"
                         ValueChanged="Any_Changed"/>

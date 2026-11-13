@@ -119,6 +119,9 @@ public sealed class BoardHistory(InkCanvas canvas)
         _redo.Clear();
     }
 
+    /// <summary>Vrai pendant un geste (bouton gauche enfoncé) : les opérations rejoignent la même étape.</summary>
+    public bool IsGrouping => _grouping;
+
     public void BeginGroup()
     {
         _grouping = true;

@@ -122,7 +122,12 @@ commit `.docx` as text.
   **ordinary `Stroke`s** (polyline points, `FitToCurve=false`, `IgnorePressure=true`, tagged with the
   `ShapeKindProperty` ISF property). That is deliberate: as WPF `Shape` children they could not be erased,
   tap-selected or saved with the ink. Do not go back to `Shape` elements.
-- Images (imported PNG/JPEG, MCP illustrations) are `Image` children of `MyInkCanvas` whose `Tag` is a
+- Text (tool X): typed in a temporary `TextBox` placed in the `InkCanvas` (`BeginTextEdit` / `CommitTextEdit`), then
+  stored as a `Border` (transparent, clickable) holding a `Path` with the glyph outlines (`BoardText.BuildGeometry`,
+  Segoe UI, `Stretch=Fill`), `Tag` = `BoardTextTag`. Bounds = tight glyph bounds; resizing stretches the text. Export
+  uses the same outlines (`BoardText.PlacedGeometry`) → WYSIWYG in PNG/SVG/PDF, no font embedding. A pending edit is
+  committed by `StoreActivePage`, tool change, Escape/Ctrl+Enter or focus loss (one undo step: `IsGrouping`).
+- Images (imported PNG/JPEG, MCP illustrations) are Image children of `MyInkCanvas` whose `Tag` is a
   `BoardItemTag(Id, Data, Label)`; position them with **`InkCanvas.SetLeft/SetTop`** (`Canvas.SetLeft` is
   ignored by InkCanvas). Ink renders above them, so they can be annotated. The eraser does not touch them —
   select + Delete instead.
@@ -142,7 +147,7 @@ commit `.docx` as text.
   are not rotated. Call `UpdateRotateHandle()` after anything that moves the view or the selection.
 - Auto-placement: `AddImageItem` without x/y uses `FindFreeSpot` (no ink/image overlap, nearest the view
   centre, else right of all content) and recentres the view if the item lands off-screen.
-- `.gboard` file = ZIP, version 3: `pages/<n>/ink.isf` (native Ink Serialized Format),
+- `.gboard` file = ZIP, version 4 (v4 added per-page `Texts`): `pages/<n>/ink.isf` (native Ink Serialized Format),
   `pages/<n>/items/<i>.png|.jpg`, `board.json` (active page + per page: id, title, background, view, item
   positions). Versions 1–2 (single page at the archive root) still load. Written to `<path>.tmp` then moved.
 - Export: PDF = every page (one PDF page each, empty page → A4 landscape); PNG/JPEG/SVG = active page only.

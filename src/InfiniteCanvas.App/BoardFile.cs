@@ -1,16 +1,18 @@
+﻿using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Windows;
 using System.Windows.Ink;
+using System.Windows.Media;
 
 namespace InfiniteCanvas.App;
 
 /// <summary>Image posée sur le tableau (PNG/JPEG importé ou illustration générée via MCP).</summary>
 public sealed record BoardItemData(string Id, byte[] Data, Rect Bounds, string? Label);
 
-/// <summary>Une page du classeur : ses traits, ses images, son arrière-plan et sa vue.</summary>
+/// <summary>Une page du classeur : ses traits, ses images, son arrière-plan, sa vue et ses textes.</summary>
 public sealed record BoardPageData(
     string Id,
     string Title,
@@ -19,7 +21,8 @@ public sealed record BoardPageData(
     BoardBackground Background,
     double Scale,
     double TranslateX,
-    double TranslateY);
+    double TranslateY,
+    IReadOnlyList<BoardTextData>? Texts = null);
 
 /// <summary>Contenu d'un fichier : les pages, dans l'ordre des onglets, et la page active.</summary>
 public sealed record BoardDocument(IReadOnlyList<BoardPageData> Pages, int ActivePage);
@@ -28,7 +31,8 @@ public sealed record BoardDocument(IReadOnlyList<BoardPageData> Pages, int Activ
 /// Format de fichier « .gboard » : une archive ZIP contenant
 ///  - <c>pages/&lt;n&gt;/ink.isf</c>   : les traits de la page n (Ink Serialized Format natif : pression, couleurs…) ;
 ///  - <c>pages/&lt;n&gt;/items/*</c>   : les images de la page n, octets d'origine ;
-///  - <c>board.json</c>             : métadonnées (version, page active, titre/arrière-plan/vue/images de chaque page).
+///  - <c>board.json</c>             : métadonnées (version, page active, titre/arrière-plan/vue/images/textes de chaque page).
+/// Version 4 : ajout des textes (« Texts » dans chaque page).
 /// Les versions 1 et 2 (une seule page, à la racine de l'archive) restent lisibles.
 /// En attendant la base SQLite prévue par le cahier des charges.
 /// </summary>
@@ -36,7 +40,7 @@ public static class BoardFile
 {
     public const string Extension = ".gboard";
     public const string DialogFilter = "Tableau GreenBoard (*.gboard)|*.gboard";
-    private const int CurrentVersion = 3;
+    private const int CurrentVersion = 4;
 
     private sealed class Meta
     {
@@ -63,6 +67,20 @@ public static class BoardFile
         public double TranslateX { get; set; }
         public double TranslateY { get; set; }
         public List<ItemMeta> Items { get; set; } = [];
+        public List<TextMeta>? Texts { get; set; }
+    }
+
+    private sealed class TextMeta
+    {
+        public string Id { get; set; } = "";
+        public string Text { get; set; } = "";
+        public double FontSize { get; set; } = 28;
+        /// <summary>Couleur « #AARRGGBB ».</summary>
+        public string Color { get; set; } = "#FF1F2328";
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double Width { get; set; }
+        public double Height { get; set; }
     }
 
     private sealed class ItemMeta
@@ -119,6 +137,12 @@ public static class BoardFile
                         X = item.Bounds.X, Y = item.Bounds.Y, Width = item.Bounds.Width, Height = item.Bounds.Height
                     });
                 }
+                if (page.Texts is { Count: > 0 } texts)
+                    pageMeta.Texts = texts.Select(t => new TextMeta
+                    {
+                        Id = t.Id, Text = t.Text, FontSize = t.FontSize, Color = t.Color.ToString(CultureInfo.InvariantCulture),
+                        X = t.Bounds.X, Y = t.Bounds.Y, Width = t.Bounds.Width, Height = t.Bounds.Height
+                    }).ToList();
                 meta.Pages.Add(pageMeta);
             }
 
@@ -147,7 +171,7 @@ public static class BoardFile
                     string.IsNullOrEmpty(p.Id) ? NewId() : p.Id,
                     string.IsNullOrWhiteSpace(p.Title) ? $"Page {pages.Count + 1}" : p.Title,
                     ReadStrokes(zip, p.Ink), ReadItems(zip, p.Items),
-                    p.Background, p.Scale, p.TranslateX, p.TranslateY));
+                    p.Background, p.Scale, p.TranslateX, p.TranslateY, ReadTexts(p.Texts)));
         }
         else
         {
@@ -179,6 +203,21 @@ public static class BoardFile
             var entry = zip.GetEntry(m.File);
             if (entry == null) continue; // image manquante : on charge le reste de la page
             result.Add(new BoardItemData(m.Id, ReadAll(entry), new Rect(m.X, m.Y, m.Width, m.Height), m.Label));
+        }
+        return result;
+    }
+
+    private static List<BoardTextData> ReadTexts(IEnumerable<TextMeta>? texts)
+    {
+        var result = new List<BoardTextData>();
+        foreach (var t in texts ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(t.Text) || !(t.Width > 0) || !(t.Height > 0)) continue;
+            Color color;
+            try { color = (Color)ColorConverter.ConvertFromString(t.Color); }
+            catch (FormatException) { color = Colors.Black; }
+            result.Add(new BoardTextData(string.IsNullOrEmpty(t.Id) ? NewId() : t.Id, t.Text,
+                new Rect(t.X, t.Y, t.Width, t.Height), t.FontSize, color));
         }
         return result;
     }

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -12,6 +12,7 @@ public sealed record AppSettings
 {
     public const double MinThickness = 1, MaxThickness = 20;
     public const double MinZoomStep = 1.02, MaxZoomStep = 1.5;
+    public const double MinTextSize = 12, MaxTextSize = 120;
     public static readonly int[] AutoSaveChoices = [0, 1, 2, 5, 10];
 
     /// <summary>Épaisseur du stylet (main libre).</summary>
@@ -22,6 +23,8 @@ public sealed record AppSettings
     public bool PenSmoothing { get; init; } = true;
     /// <summary>Épaisseur variable selon la pression du stylet graphique.</summary>
     public bool PenPressure { get; init; } = true;
+    /// <summary>Taille des nouveaux textes (outil Texte).</summary>
+    public double TextSize { get; init; } = 28;
     /// <summary>Arrière-plan des nouveaux tableaux.</summary>
     public BoardBackground DefaultBackground { get; init; } = BoardBackground.Blanc;
     /// <summary>Facteur de zoom par cran de molette.</summary>
@@ -45,6 +48,7 @@ public sealed record AppSettings
     {
         PenThickness = Clamp(PenThickness, MinThickness, MaxThickness, 3),
         ShapeThickness = Clamp(ShapeThickness, MinThickness, MaxThickness, 3),
+        TextSize = Clamp(TextSize, MinTextSize, MaxTextSize, 28),
         DefaultBackground = Enum.IsDefined(DefaultBackground) ? DefaultBackground : BoardBackground.Blanc,
         WheelZoomStep = Clamp(WheelZoomStep, MinZoomStep, MaxZoomStep, 1.1),
         AutoSaveMinutes = AutoSaveChoices.Contains(AutoSaveMinutes) ? AutoSaveMinutes : 0

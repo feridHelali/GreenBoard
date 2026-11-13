@@ -17,10 +17,13 @@ namespace InfiniteCanvas.App;
 public partial class MainWindow : Window
 {
     // --- Outils disponibles dans la barre d'outils ---
-    private enum Tool { Select, Pen, Eraser, Pan, Rectangle, Ellipse, Triangle, Line, Arrow }
+    private enum Tool { Select, Pen, Eraser, Pan, Rectangle, Ellipse, Triangle, Line, Arrow, Text }
 
     /// <summary>Image posée sur le tableau : stockée dans le Tag de l'élément <see cref="Image"/>.</summary>
     private sealed record BoardItemTag(string Id, byte[] Data, string? Label);
+
+    /// <summary>Texte posé sur le tableau : stocké dans le Tag de l'élément (Border contenant les contours des glyphes).</summary>
+    private sealed record BoardTextTag(string Id, string Text, double FontSize, Color Color);
 
     private const double MinScale = 0.1;   // 10 %
     private const double MaxScale = 10.0;  // 1000 % (cible du cahier des charges)
@@ -74,6 +77,11 @@ public partial class MainWindow : Window
     private Tool _shapeTool;
     private Point _shapeStart;
 
+    // Texte en cours de saisie (TextBox posée sur la feuille) et texte existant en cours de modification
+    private TextBox? _textEditor;
+    private Border? _editingText;
+    private Color _textEditorColor;
+
     // Instantané de la sélection avant déplacement / redimensionnement (pour Annuler)
     private Dictionary<Stroke, StylusPointCollection>? _selectionPoints;
     private Dictionary<FrameworkElement, Rect>? _selectionBounds;
@@ -108,6 +116,7 @@ public partial class MainWindow : Window
         _toolButtons[Tool.Triangle] = BtnTriangle;
         _toolButtons[Tool.Line] = BtnLine;
         _toolButtons[Tool.Arrow] = BtnArrow;
+        _toolButtons[Tool.Text] = BtnText;
 
         BuildBackgroundChoices();
         BtnPen.IsChecked = true;
@@ -218,6 +227,7 @@ public partial class MainWindow : Window
     {
         if (sender is RadioButton { Tag: string tag } && Enum.TryParse(tag, out Tool tool))
         {
+            if (tool != Tool.Text) CommitTextEdit();
             _tool = tool;
             ApplyTool();
         }
@@ -265,6 +275,11 @@ public partial class MainWindow : Window
                 MyInkCanvas.EditingMode = InkCanvasEditingMode.EraseByStroke;
                 MyInkCanvas.UseCustomCursor = false;
                 break;
+            case Tool.Text:
+                MyInkCanvas.EditingMode = InkCanvasEditingMode.None;
+                MyInkCanvas.UseCustomCursor = true;
+                MyInkCanvas.Cursor = Cursors.IBeam;
+                break;
             default: // Formes
                 MyInkCanvas.EditingMode = InkCanvasEditingMode.None;
                 MyInkCanvas.UseCustomCursor = true;
@@ -279,6 +294,14 @@ public partial class MainWindow : Window
 
         var color = (Color)ColorConverter.ConvertFromString(hex);
         MyInkCanvas.DefaultDrawingAttributes.Color = color;
+
+        // Saisie de texte en cours : la couleur s'applique au texte (les pastilles ne prennent pas le focus)
+        if (_textEditor != null)
+        {
+            _textEditorColor = color;
+            _textEditor.Foreground = _textEditor.CaretBrush = new SolidColorBrush(color);
+            return;
+        }
 
         // Outil Sélection avec des traits sélectionnés : on les recolore (annulable)
         if (_tool == Tool.Select)
@@ -397,6 +420,7 @@ public partial class MainWindow : Window
             Key.T => Tool.Triangle,
             Key.L => Tool.Line,
             Key.A => Tool.Arrow,
+            Key.X => Tool.Text,
             _ => null
         };
         if (tool is { } t)
@@ -677,6 +701,8 @@ public partial class MainWindow : Window
     {
         // Boutons flottants (réglages, aide) : clic normal, jamais de déplacement de la vue
         if (e.OriginalSource is Visual source && CornerButtons.IsAncestorOf(source)) return;
+        // Clic dans le texte en cours de saisie : il garde le focus (placement du curseur, sélection)
+        if (_textEditor != null && e.OriginalSource is Visual inEditor && _textEditor.IsAncestorOf(inEditor)) return;
 
         CanvasContainer.Focus(); // garde le clavier (Espace, raccourcis) sur la zone de dessin
 
@@ -723,11 +749,174 @@ public partial class MainWindow : Window
     }
 
     // =====================================================================
+    // TEXTE : saisi dans une zone de texte posée sur la feuille, puis converti en contours vectoriels
+    // (Border transparent + Path étiré : redimensionnable comme une image, rendu identique à l'export)
+    // =====================================================================
+    private static IEnumerable<Border> TextsOf(IEnumerable<UIElement> elements) =>
+        elements.OfType<Border>().Where(b => b.Tag is BoardTextTag);
+
+    private static BoardTextData TextDataOf(Border element)
+    {
+        var tag = (BoardTextTag)element.Tag;
+        return new BoardTextData(tag.Id, tag.Text, BoardHistory.BoundsOf(element), tag.FontSize, tag.Color);
+    }
+
+    private static Border CreateTextElement(BoardTextData text)
+    {
+        var element = new Border
+        {
+            Background = Brushes.Transparent, // toute la zone est cliquable, pas seulement les glyphes
+            Tag = new BoardTextTag(text.Id, text.Text, text.FontSize, text.Color),
+            Child = new System.Windows.Shapes.Path
+            {
+                Data = BoardText.BuildGeometry(text.Text, text.FontSize),
+                Fill = new SolidColorBrush(text.Color),
+                Stretch = Stretch.Fill
+            }
+        };
+        BoardHistory.Apply(element, text.Bounds);
+        return element;
+    }
+
+    /// <summary>Décalage entre le coin d'une TextBox (bordure 1, sans marge intérieure) et l'origine du texte.</summary>
+    private static readonly Vector TextBoxInset = new(3, 1);
+
+    /// <summary>
+    /// Outil Texte : clic sur un texte → le modifier ; clic ailleurs → terminer la saisie en cours, sinon en commencer une.
+    /// Outil Sélection : double-clic sur un texte → le modifier. Renvoie vrai si le clic est consommé.
+    /// </summary>
+    private bool HandleTextClick(MouseButtonEventArgs e)
+    {
+        // Clic dans la zone en cours de saisie : la TextBox le gère
+        if (_textEditor != null && e.OriginalSource is Visual v && _textEditor.IsAncestorOf(v)) return true;
+
+        bool textTool = _tool == Tool.Text && !_spaceHeld;
+        bool editFromSelect = _tool == Tool.Select && e.ClickCount == 2;
+        if (!textTool && !editFromSelect) return false;
+
+        Point p = e.GetPosition(MyInkCanvas);
+        var hit = TextsOf(MyInkCanvas.Children.Cast<UIElement>())
+            .LastOrDefault(t => t.Visibility == Visibility.Visible && BoardHistory.BoundsOf(t).Contains(p));
+
+        if (editFromSelect)
+        {
+            if (hit == null) return false;
+            SelectTool(Tool.Text);
+        }
+
+        bool wasEditing = _textEditor != null;
+        CommitTextEdit();
+        if (hit != null) BeginTextEdit(hit);
+        else if (!wasEditing) BeginTextEdit(p - TextBoxInset, "", _settings.TextSize, CurrentColor, null);
+        e.Handled = true;
+        return true;
+    }
+
+    /// <summary>Modifie un texte existant : la zone de saisie reprend sa taille apparente et sa couleur.</summary>
+    private void BeginTextEdit(Border element)
+    {
+        var tag = (BoardTextTag)element.Tag;
+        var bounds = BoardHistory.BoundsOf(element);
+        var gb = BoardText.BuildGeometry(tag.Text, tag.FontSize).Bounds;
+        double scale = gb.Height > 0 ? bounds.Height / gb.Height : 1;
+        double fontSize = Math.Clamp(tag.FontSize * scale, BoardText.MinFontSize, BoardText.MaxFontSize);
+        // Origine du texte telle qu'affiché (les contours commencent à gb.X, gb.Y de l'origine)
+        var origin = new Point(bounds.X - gb.X * scale, bounds.Y - gb.Y * scale);
+        BeginTextEdit(origin - TextBoxInset, tag.Text, fontSize, tag.Color, element);
+    }
+
+    private void BeginTextEdit(Point topLeft, string text, double fontSize, Color color, Border? editing)
+    {
+        var brush = new SolidColorBrush(color);
+        var box = new TextBox
+        {
+            Text = text,
+            FontFamily = new FontFamily(BoardText.FontFamilyName),
+            FontSize = fontSize,
+            Foreground = brush,
+            CaretBrush = brush,
+            Background = Brushes.Transparent,
+            BorderBrush = (Brush)FindResource("AccentBrush"),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(0),
+            AcceptsReturn = true,
+            AcceptsTab = false,
+            MinWidth = fontSize * 1.5,
+            ToolTip = "Entrée : nouvelle ligne — Échap ou clic ailleurs : terminer"
+        };
+        InkCanvas.SetLeft(box, topLeft.X);
+        InkCanvas.SetTop(box, topLeft.Y);
+        box.PreviewKeyDown += (_, k) =>
+        {
+            if (k.Key == Key.Escape || (k.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Control))
+            {
+                k.Handled = true;
+                CommitTextEdit();
+            }
+        };
+        box.LostKeyboardFocus += (_, _) => Dispatcher.BeginInvoke(() => { if (_textEditor == box) CommitTextEdit(); });
+
+        if (editing != null) editing.Visibility = Visibility.Collapsed;
+        MyInkCanvas.Children.Add(box);
+        (_textEditor, _editingText, _textEditorColor) = (box, editing, color);
+
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Input, () =>
+        {
+            box.Focus();
+            Keyboard.Focus(box);
+            box.CaretIndex = box.Text.Length;
+        });
+    }
+
+    /// <summary>Termine la saisie : crée, remplace ou supprime le texte (une seule étape d'annulation).</summary>
+    private void CommitTextEdit()
+    {
+        if (_textEditor is not { } box) return;
+        var editing = _editingText;
+        (_textEditor, _editingText) = (null, null);
+
+        bool hadFocus = box.IsKeyboardFocusWithin;
+        MyInkCanvas.Children.Remove(box);
+        string text = box.Text.TrimEnd();
+        if (editing != null) editing.Visibility = Visibility.Visible;
+
+        var oldTag = editing?.Tag as BoardTextTag;
+        bool unchanged = oldTag != null && oldTag.Text == text && oldTag.Color == _textEditorColor;
+        if (!unchanged && (editing != null || !string.IsNullOrWhiteSpace(text)))
+        {
+            bool ownGroup = !_history.IsGrouping;
+            if (ownGroup) _history.BeginGroup();
+
+            if (editing != null)
+            {
+                MyInkCanvas.Children.Remove(editing);
+                _history.RecordElementRemoved(editing);
+            }
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                var gb = BoardText.BuildGeometry(text, box.FontSize).Bounds;
+                var origin = new Point(InkCanvas.GetLeft(box), InkCanvas.GetTop(box)) + TextBoxInset;
+                var element = CreateTextElement(new BoardTextData(
+                    oldTag?.Id ?? BoardFile.NewId(), text,
+                    new Rect(origin.X + gb.X, origin.Y + gb.Y, gb.Width, gb.Height),
+                    box.FontSize, _textEditorColor));
+                MyInkCanvas.Children.Add(element);
+                _history.RecordElementAdded(element);
+            }
+
+            if (ownGroup) _history.EndGroup();
+        }
+
+        if (hadFocus) CanvasContainer.Focus();
+    }
+
+    // =====================================================================
     // FORMES : tracées par glisser, ce sont de vrais traits d'encre
     // (donc gomme, sélection, déplacement, redimensionnement, annuler, enregistrement et export fonctionnent)
     // =====================================================================
     private void InkCanvas_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        if (HandleTextClick(e)) return;
         if (!IsShapeTool(_tool)) return;
 
         _shapeTool = _tool;
@@ -937,6 +1126,7 @@ public partial class MainWindow : Window
         const double gap = 24, step = 40;
         var occupied = MyInkCanvas.Strokes.Select(s => s.GetBounds())
             .Concat(ItemElements.Select(BoardHistory.BoundsOf))
+            .Concat(TextsOf(MyInkCanvas.Children.Cast<UIElement>()).Select(BoardHistory.BoundsOf))
             .Select(r => { r.Inflate(gap, gap); return r; })
             .ToList();
         bool IsFree(Rect r) => !occupied.Any(o => o.IntersectsWith(r));
@@ -1065,7 +1255,8 @@ public partial class MainWindow : Window
                 var tag = (BoardItemTag)i.Tag;
                 return new BoardItemData(tag.Id, tag.Data, BoardHistory.BoundsOf(i), tag.Label);
             }).ToList(),
-            p.Background, p.Scale, p.TranslateX, p.TranslateY)).ToList();
+            p.Background, p.Scale, p.TranslateX, p.TranslateY,
+            TextsOf(p.Elements).Select(TextDataOf).ToList())).ToList();
         return new BoardDocument(pages, _pages.IndexOf(Page));
     }
 
@@ -1083,6 +1274,8 @@ public partial class MainWindow : Window
                 try { page.Elements.Add(CreateItemElement(item.Id, item.Data, item.Label, DecodeImage(item.Data), item.Bounds)); }
                 catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Image ignorée : {ex.Message}"); }
             }
+            foreach (var text in data.Texts ?? [])
+                page.Elements.Add(CreateTextElement(text));
             page.Scale = Math.Clamp(data.Scale, MinScale, MaxScale);
             page.TranslateX = data.TranslateX;
             page.TranslateY = data.TranslateY;
@@ -1195,7 +1388,8 @@ public partial class MainWindow : Window
             ItemsOf(p.Elements)
                 .Select(i => new BoardExporter.Item((BitmapSource)i.Source, BoardHistory.BoundsOf(i), ((BoardItemTag)i.Tag).Data))
                 .ToList(),
-            p.Background)).ToList();
+            p.Background,
+            TextsOf(p.Elements).Select(TextDataOf).ToList())).ToList();
     }
 
     // =====================================================================
@@ -1427,6 +1621,7 @@ public partial class MainWindow : Window
     private void StoreActivePage()
     {
         if (_page == null) return;
+        CommitTextEdit(); // un texte en cours de saisie fait partie de la page
         _page.Elements = MyInkCanvas.Children.Cast<UIElement>().ToList();
         _page.Background = _background;
         _page.Scale = Scale;
@@ -1499,6 +1694,8 @@ public partial class MainWindow : Window
             copy.Elements.Add(CreateItemElement(BoardFile.NewId(), tag.Data, tag.Label, (BitmapSource)image.Source,
                 BoardHistory.BoundsOf(image)));
         }
+        foreach (var text in TextsOf(source.Elements))
+            copy.Elements.Add(CreateTextElement(TextDataOf(text) with { Id = BoardFile.NewId() }));
         (copy.Scale, copy.TranslateX, copy.TranslateY, copy.HasView) =
             (source.Scale, source.TranslateX, source.TranslateY, source.HasView);
 

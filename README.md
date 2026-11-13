@@ -25,6 +25,7 @@ and AI-drawn course illustrations through MCP (Claude, OpenCode…).*
 | | |
 |---|---|
 | ✍️ **Écriture naturelle** | Stylet sensible à la pression (XP-Pen, Wacom…), tracé lissé, 6 couleurs dont le blanc craie |
+| 🔤 **Texte** | Outil Texte (X) : cliquez et tapez, multiligne, couleurs ; modifiable, redimensionnable, exporté en vectoriel |
 | 🔷 **Formes** | Rectangle, ellipse, triangle, ligne, flèche (Maj : carré, cercle, 45°) — effaçables comme l'encre |
 | 🖐️ **Sélection** | Déplacer, redimensionner, faire pivoter, recolorer, supprimer |
 | ♾️ **Canevas infini** | Zoom 10 %–1000 %, Espace + glisser pour se déplacer, 6 fonds : blanc, tableau vert, quadrillage, millimétré, Seyès, pointillés |
@@ -44,6 +45,9 @@ Cochez « Serveur MCP pour assistants IA » à l'installation (type **Complète*
 OpenCode, autres clients MCP) y sont générés avec le bon chemin, avec 10 demandes types par matière.
 
 ## Développement
+
+➡️ **[Guide du développeur](DEVELOPER.md)** : outils à installer, compilation, architecture, recettes pour ajouter
+une fonctionnalité, tests, construction de l'installateur et publication d'une version.
 
 ```powershell
 dotnet build InfiniteCanvas.sln

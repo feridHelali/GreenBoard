@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -43,6 +43,7 @@ public partial class SettingsWindow : Window
         _loading = true;
         PenSlider.Value = s.PenThickness;
         ShapeSlider.Value = s.ShapeThickness;
+        TextSlider.Value = s.TextSize;
         SmoothingBox.IsChecked = s.PenSmoothing;
         PressureBox.IsChecked = s.PenPressure;
         BackgroundCombo.SelectedItem = BackgroundCombo.Items.Cast<ComboBoxItem>().First(i => (BoardBackground)i.Tag == s.DefaultBackground);
@@ -57,6 +58,7 @@ public partial class SettingsWindow : Window
     {
         PenThickness = PenSlider.Value,
         ShapeThickness = ShapeSlider.Value,
+        TextSize = TextSlider.Value,
         PenSmoothing = SmoothingBox.IsChecked == true,
         PenPressure = PressureBox.IsChecked == true,
         DefaultBackground = BackgroundCombo.SelectedItem is ComboBoxItem { Tag: BoardBackground bg } ? bg : BoardBackground.Blanc,
@@ -74,10 +76,11 @@ public partial class SettingsWindow : Window
     /// <summary>Met à jour les valeurs affichées et l'aperçu, puis applique au tableau.</summary>
     private void Refresh()
     {
-        if (ZoomValue == null || PreviewCanvas == null) return;
+        if (ZoomValue == null || PreviewCanvas == null || TextValue == null) return;
         var s = Read();
         PenValue.Text = $"{s.PenThickness:0.#} px";
         ShapeValue.Text = $"{s.ShapeThickness:0.#} px";
+        TextValue.Text = $"{s.TextSize:0} px";
         ZoomValue.Text = $"+{(s.WheelZoomStep - 1) * 100:0} %";
         DrawPreview(s);
         _apply(s);
@@ -94,16 +97,25 @@ public partial class SettingsWindow : Window
             Stroke = ink, StrokeThickness = s.PenThickness,
             StrokeLineJoin = PenLineJoin.Round, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round
         };
-        for (double x = 0; x <= 230; x += 4)
-            wave.Points.Add(new Point(18 + x, 23 + 9 * Math.Sin(x / 22)));
+        for (double x = 0; x <= 240; x += 4)
+            wave.Points.Add(new Point(18 + x * 0.95, 23 + 9 * Math.Sin(x / 22)));
         PreviewCanvas.Children.Add(wave);
 
         // Forme (rectangle)
         var rect = new Rectangle
         {
-            Width = 120, Height = 28, Stroke = (Brush)FindResource("AccentBrush"), StrokeThickness = s.ShapeThickness
+            Width = 104, Height = 28, Stroke = (Brush)FindResource("AccentBrush"), StrokeThickness = s.ShapeThickness
         };
-        Canvas.SetLeft(rect, 300);
+        Canvas.SetLeft(rect, 330);
+
+        // Texte (taille réelle, plafonnée à la hauteur de l'aperçu)
+        var sample = new System.Windows.Shapes.Path
+        {
+            Data = BoardText.BuildGeometry("Aa", Math.Min(s.TextSize, 34)), Fill = ink
+        };
+        Canvas.SetLeft(sample, 268);
+        Canvas.SetTop(sample, Math.Max(0, 23 - Math.Min(s.TextSize, 34) * 0.7));
+        PreviewCanvas.Children.Add(sample);
         Canvas.SetTop(rect, 9);
         PreviewCanvas.Children.Add(rect);
     }
