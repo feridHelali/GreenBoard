@@ -18,6 +18,11 @@ $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:LOCALAPPDATA\P
     Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $iscc) { throw "Inno Setup 6 introuvable. Installez-le : winget install JRSoftware.InnoSetup" }
 
+# L'écran de démarrage affiche la version : on le régénère (avec l'icône) avant de compiler
+Write-Host '0/4 Icône et écran de démarrage…' -ForegroundColor Cyan
+pwsh -NoProfile -STA -File (Join-Path $PSScriptRoot 'make-icon.ps1') | Out-Null
+if ($LASTEXITCODE) { throw 'Échec de la génération de l''icône / écran de démarrage.' }
+
 if (-not $SkipTests) {
     Write-Host '1/4 Tests…' -ForegroundColor Cyan
     dotnet test (Join-Path $root 'InfiniteCanvas.sln') -c Release --nologo -v q

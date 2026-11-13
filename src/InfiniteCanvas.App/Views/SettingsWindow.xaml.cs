@@ -1,0 +1,122 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Shapes;
+
+namespace InfiniteCanvas.App.Views;
+
+/// <summary>
+/// Réglages de GreenBoard. Chaque modification est appliquée tout de suite au tableau (aperçu en direct) ;
+/// « Annuler » ou la fermeture de la fenêtre rétablit les réglages d'origine.
+/// </summary>
+public partial class SettingsWindow : Window
+{
+    private readonly AppSettings _original;
+    private readonly Action<AppSettings> _apply;
+    private bool _loading;
+    private bool _saved;
+
+    public SettingsWindow(AppSettings current, Action<AppSettings> apply)
+    {
+        InitializeComponent();
+        _original = current;
+        _apply = apply;
+
+        foreach (var bg in Enum.GetValues<BoardBackground>())
+            BackgroundCombo.Items.Add(new ComboBoxItem { Content = BoardBackgrounds.Label(bg), Tag = bg });
+        foreach (int minutes in AppSettings.AutoSaveChoices)
+            AutoSaveCombo.Items.Add(new ComboBoxItem
+            {
+                Content = minutes == 0 ? "Désactivée" : minutes == 1 ? "Toutes les minutes" : $"Toutes les {minutes} minutes",
+                Tag = minutes
+            });
+
+        Show(current);
+        Closed += (_, _) => { if (!_saved) _apply(_original); };
+    }
+
+    /// <summary>Réglages choisis (valides après « Enregistrer »).</summary>
+    public AppSettings Result { get; private set; } = new();
+
+    private void Show(AppSettings s)
+    {
+        _loading = true;
+        PenSlider.Value = s.PenThickness;
+        ShapeSlider.Value = s.ShapeThickness;
+        SmoothingBox.IsChecked = s.PenSmoothing;
+        PressureBox.IsChecked = s.PenPressure;
+        BackgroundCombo.SelectedItem = BackgroundCombo.Items.Cast<ComboBoxItem>().First(i => (BoardBackground)i.Tag == s.DefaultBackground);
+        ZoomSlider.Value = s.WheelZoomStep;
+        AutoSaveCombo.SelectedItem = AutoSaveCombo.Items.Cast<ComboBoxItem>().First(i => (int)i.Tag == s.AutoSaveMinutes);
+        ConfirmClearBox.IsChecked = s.ConfirmClear;
+        _loading = false;
+        Refresh();
+    }
+
+    private AppSettings Read() => new AppSettings
+    {
+        PenThickness = PenSlider.Value,
+        ShapeThickness = ShapeSlider.Value,
+        PenSmoothing = SmoothingBox.IsChecked == true,
+        PenPressure = PressureBox.IsChecked == true,
+        DefaultBackground = BackgroundCombo.SelectedItem is ComboBoxItem { Tag: BoardBackground bg } ? bg : BoardBackground.Blanc,
+        WheelZoomStep = Math.Round(ZoomSlider.Value, 2),
+        AutoSaveMinutes = AutoSaveCombo.SelectedItem is ComboBoxItem { Tag: int m } ? m : 0,
+        ConfirmClear = ConfirmClearBox.IsChecked == true
+    }.Normalized();
+
+    private void Any_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading || !IsInitialized) return;
+        Refresh();
+    }
+
+    /// <summary>Met à jour les valeurs affichées et l'aperçu, puis applique au tableau.</summary>
+    private void Refresh()
+    {
+        if (ZoomValue == null || PreviewCanvas == null) return;
+        var s = Read();
+        PenValue.Text = $"{s.PenThickness:0.#} px";
+        ShapeValue.Text = $"{s.ShapeThickness:0.#} px";
+        ZoomValue.Text = $"+{(s.WheelZoomStep - 1) * 100:0} %";
+        DrawPreview(s);
+        _apply(s);
+    }
+
+    private void DrawPreview(AppSettings s)
+    {
+        PreviewCanvas.Children.Clear();
+        var ink = (Brush)FindResource("IconBrush");
+
+        // Trait à main levée (sinusoïde)
+        var wave = new Polyline
+        {
+            Stroke = ink, StrokeThickness = s.PenThickness,
+            StrokeLineJoin = PenLineJoin.Round, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round
+        };
+        for (double x = 0; x <= 230; x += 4)
+            wave.Points.Add(new Point(18 + x, 23 + 9 * Math.Sin(x / 22)));
+        PreviewCanvas.Children.Add(wave);
+
+        // Forme (rectangle)
+        var rect = new Rectangle
+        {
+            Width = 120, Height = 28, Stroke = (Brush)FindResource("AccentBrush"), StrokeThickness = s.ShapeThickness
+        };
+        Canvas.SetLeft(rect, 300);
+        Canvas.SetTop(rect, 9);
+        PreviewCanvas.Children.Add(rect);
+    }
+
+    private void ConnectAssistant_Click(object sender, RoutedEventArgs e) =>
+        new HelpWindow(HelpTab.Assistant) { Owner = this }.ShowDialog();
+
+    private void Defaults_Click(object sender, RoutedEventArgs e) => Show(new AppSettings());
+
+    private void Save_Click(object sender, RoutedEventArgs e)
+    {
+        Result = Read();
+        _saved = true;
+        DialogResult = true;
+    }
+}

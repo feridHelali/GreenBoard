@@ -35,6 +35,12 @@
             <PathGeometry x:Key="IconPage" Figures="M7,3 L14,3 L19,8 L19,20 C19,20.6 18.6,21 18,21 L7,21 C6.4,21 6,20.6 6,20 L6,4 C6,3.4 6.4,3 7,3 Z M14,3 L14,8 L19,8"/>
             <PathGeometry x:Key="IconUndo" Figures="M9,14 L4,9 L9,4 M4,9 L14.5,9 C17.5,9 20,11.5 20,14.5 C20,17.5 17.5,20 14.5,20 L11,20"/>
             <PathGeometry x:Key="IconRedo" Figures="M15,14 L20,9 L15,4 M20,9 L9.5,9 C6.5,9 4,11.5 4,14.5 C4,17.5 6.5,20 9.5,20 L13,20"/>
+            <PathGeometry x:Key="IconGear" Figures="M19.2,10.27 L21.5,10.65 L21.5,13.35 L19.2,13.73 L18.31,15.87 L19.68,17.76 L17.76,19.68 L15.87,18.31 L13.73,19.2 L13.35,21.5 L10.65,21.5 L10.27,19.2 L8.13,18.31 L6.24,19.68 L4.32,17.76 L5.69,15.87 L4.8,13.73 L2.5,13.35 L2.5,10.65 L4.8,10.27 L5.69,8.13 L4.32,6.24 L6.24,4.32 L8.13,5.69 L10.27,4.8 L10.65,2.5 L13.35,2.5 L13.73,4.8 L15.87,5.69 L17.76,4.32 L19.68,6.24 L18.31,8.13 Z M9,12 A3,3 0 1 1 15,12 A3,3 0 1 1 9,12 Z"/>
+            <PathGeometry x:Key="IconHelp" Figures="M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M9.4,9.4 C9.4,7.9 10.6,6.8 12,6.8 C13.4,6.8 14.6,7.8 14.6,9.2 C14.6,11.1 12,11.3 12,13.6 M12,17.1 L12,17.2"/>
+            <PathGeometry x:Key="IconSparkle" Figures="M11,3 L12.8,9.2 L19,11 L12.8,12.8 L11,19 L9.2,12.8 L3,11 L9.2,9.2 Z M18.5,15 L19.3,17.2 L21.5,18 L19.3,18.8 L18.5,21 L17.7,18.8 L15.5,18 L17.7,17.2 Z"/>
+            <PathGeometry x:Key="IconCopy" Figures="M9,8 L18,8 C18.6,8 19,8.4 19,9 L19,19 C19,19.6 18.6,20 18,20 L9,20 C8.4,20 8,19.6 8,19 L8,9 C8,8.4 8.4,8 9,8 Z M5,15.5 L5,5 C5,4.4 5.4,4 6,4 L15.5,4"/>
+            <PathGeometry x:Key="IconInfo" Figures="M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M12,11 L12,16.8 M12,7.4 L12,7.5"/>
+            <PathGeometry x:Key="IconKeyboard" Figures="M4,6 L20,6 C20.6,6 21,6.4 21,7 L21,17 C21,17.6 20.6,18 20,18 L4,18 C3.4,18 3,17.6 3,17 L3,7 C3,6.4 3.4,6 4,6 Z M6.5,9.5 L6.6,9.5 M10,9.5 L10.1,9.5 M13.5,9.5 L13.6,9.5 M17,9.5 L17.1,9.5 M6.5,12.5 L6.6,12.5 M17,12.5 L17.1,12.5 M8,15 L16,15"/>
 
             <!-- Palette commune de la barre d'outils -->
             <SolidColorBrush x:Key="IconBrush" Color="#3C4350"/>
@@ -188,6 +194,103 @@
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
+            </Style>
+
+            <!-- Bouton flottant rond (réglages / aide, en bas à gauche de la zone de dessin) -->
+            <Style x:Key="FloatingButtonStyle" TargetType="Button">
+                <Setter Property="Focusable" Value="False" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Margin" Value="0,0,8,0" />
+                <Setter Property="ToolTipService.InitialShowDelay" Value="300" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Root" Width="42" Height="42" CornerRadius="21" Background="White"
+                                    BorderBrush="{StaticResource DividerBrush}" BorderThickness="1">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.2"/>
+                                </Border.Effect>
+                                <Viewbox Width="22" Height="22">
+                                    <Canvas Width="24" Height="24">
+                                        <Path x:Name="Icon" Data="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}"
+                                              Stroke="{StaticResource IconBrush}" StrokeThickness="1.8"
+                                              StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Root" Property="Background" Value="{StaticResource AccentSoftBrush}" />
+                                    <Setter TargetName="Icon" Property="Stroke" Value="{StaticResource AccentBrush}" />
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Root" Property="Background" Value="{StaticResource PressedBrush}" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Fenêtres de dialogue (Réglages, Aide, À propos) -->
+            <Style x:Key="DialogTitle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="17" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="#1F2937" />
+            </Style>
+            <Style x:Key="DialogSection" TargetType="TextBlock">
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                <Setter Property="Margin" Value="0,18,0,6" />
+            </Style>
+            <Style x:Key="DialogHint" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="#6B7280" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+            <Style x:Key="DialogButtonStyle" TargetType="Button">
+                <Setter Property="Padding" Value="16,7" />
+                <Setter Property="Margin" Value="8,0,0,0" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Background" Value="White" />
+                <Setter Property="Foreground" Value="#1F2937" />
+                <Setter Property="BorderBrush" Value="#D1D5DB" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Root" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="1" CornerRadius="7" Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Root" Property="Opacity" Value="0.88" />
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="Root" Property="Opacity" Value="0.45" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource DialogButtonStyle}">
+                <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                <Setter Property="Foreground" Value="White" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+            </Style>
+            <!-- Touche de clavier (aide) -->
+            <Style x:Key="KeyCap" TargetType="Border">
+                <Setter Property="Background" Value="#F3F4F6" />
+                <Setter Property="BorderBrush" Value="#D1D5DB" />
+                <Setter Property="BorderThickness" Value="1,1,1,2" />
+                <Setter Property="CornerRadius" Value="5" />
+                <Setter Property="Padding" Value="7,2" />
+                <Setter Property="Margin" Value="0,0,4,0" />
+                <Setter Property="TextElement.FontFamily" Value="Consolas" />
+                <Setter Property="TextElement.FontSize" Value="12" />
+                <Setter Property="TextElement.Foreground" Value="#1F2937" />
             </Style>
 
         </ResourceDictionary>

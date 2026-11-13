@@ -49,8 +49,12 @@ pwsh -File installer\build-installer.ps1   # tests → self-contained win-x64 pu
   **Never change `AppId`** — upgrades and uninstall depend on it. Bump `<Version>` for each release.
 - `GreenBoard.exe "<file>.gboard"` opens the file (`OpenFromCommandLine`, called on `Loaded`).
 - Icon (green board, chalk ∞, amber stylus; ≤ 40 px drops grid and stylus): `src\InfiniteCanvas.App\Assets\GreenBoard.ico`
-  + `GreenBoard.png` (512 px, toolbar logo), both regenerated with `pwsh -STA -File installer\make-icon.ps1`
-  (`-Preview <dir>` writes a contact sheet of every size).
+  + `GreenBoard.png` (512 px, toolbar logo) + `Splash.png` (startup screen, shows the csproj `<Version>`), all
+  regenerated with `pwsh -STA -File installer\make-icon.ps1` (`-Preview <dir>` writes contact sheets);
+  `build-installer.ps1` runs it first so the splash version is never stale. `AlfaComputers.png` (publisher logo)
+  and `Auteur.png` (author photo, 360 px) are hand-supplied assets used by the About tab and the splash.
+- Identity: publisher **Alfa Computers Apps**, author **Ferid HELALI + Claude Code** (csproj `Company`/`Authors`,
+  `AppInfo.cs`, installer `AppPublisher`). Public repo / releases: https://github.com/feridHelali/GreenBoard
 - Self-contained check: `GreenBoard.runtimeconfig.json` must list `includedFrameworks` (not `frameworks`), and
   native DLLs import only Windows system DLLs or files shipped alongside (WPF brings `vcruntime140_cor3.dll`).
 - The setup exe is not code-signed: Windows SmartScreen warns on first run.
@@ -68,17 +72,27 @@ commit `.docx` as text.
 - `App.xaml` — **application-level resources only**: `<Application>` root, `StartupUri="MainWindow.xaml"`,
   and `<Application.Resources>` holding the toolbar look: icon geometries (`Icon*` `PathGeometry`, 24×24
   stroke-only grid), brushes, `ToggleButtonStyle` (tool radio buttons — `Content` is an icon geometry),
-  `IconButtonStyle` / `IconToggleStyle` (action buttons), `ColorSwatchStyle`, `ToolbarDivider`.
-  No layout belongs here.
-- `App.xaml.cs` — empty `App : Application` partial class. SDK-style WPF generates `App.g.cs` containing a
-  `Main()` that calls `InitializeComponent()` itself, so **do not** add a manual `InitializeComponent()`
-  call or an `OnStartup` override that calls it.
+  `IconButtonStyle` / `IconToggleStyle` (action buttons), `ColorSwatchStyle`, `ToolbarDivider`,
+  `FloatingButtonStyle` (round gear/help buttons), and the shared dialog look (`DialogTitle`, `DialogSection`,
+  `DialogHint`, `DialogButtonStyle`, `PrimaryButtonStyle`, `KeyCap`). No layout belongs here.
+- `App.xaml.cs` — `App : Application`; only the splash screen (`OnStartup` shows `Assets/Splash.png`,
+  `HideSplash()` fades it ≥ 1.5 s after start, called from `MainWindow.ContentRendered`). SDK-style WPF generates
+  `App.g.cs` containing a `Main()` that calls `InitializeComponent()` itself, so **do not** add a manual
+  `InitializeComponent()` call anywhere in `App`.
 - `MainWindow.xaml` / `MainWindow.xaml.cs` — the entire UI and its event handling, namespace
   `InfiniteCanvas.App`. `x:Class` and the code-behind namespace must stay in sync.
 - Non-UI helpers next to it (all `public` so `InfiniteCanvas.App.Tests` can reach them):
   `BoardBackgrounds.cs` (`BoardBackground` enum + brush factory shared by screen and export),
   `BoardHistory.cs` (undo/redo), `BoardFile.cs` (`.gboard` save/load), `BoardExporter.cs` (PNG/JPEG/SVG/PDF),
-  `BoardPipeServer.cs` (named-pipe endpoint for the MCP server).
+  `BoardPipeServer.cs` (named-pipe endpoint for the MCP server), `AppSettings.cs` (user settings record,
+  `%APPDATA%\GreenBoard\reglages.json`, `Normalized()` clamps every value, corrupt file → defaults),
+  `AppInfo.cs` (version from `AssemblyInformationalVersion`, publisher, author, repo URL).
+- `Views/` dialogs: `ShareWindow` (e-mail), `SettingsWindow` (opened by the bottom-left gear or Ctrl+, ; applies
+  live through a callback and reverts on Cancel/close), `HelpWindow` (F1 / « ? » button; tabs `HelpTab`
+  Features, Assistant (MCP setup for Claude Desktop, Claude Code, OpenCode, generic stdio + 10 teaching
+  prompts), Shortcuts, About). Keep the Shortcuts tab in sync with `Window_PreviewKeyDown`.
+- The main window opens maximized. The floating `CornerButtons` sit above the sheet; `CanvasContainer_PreviewMouseDown`
+  ignores clicks on them so the Pan tool does not swallow them.
 
 ## WPF/XAML gotchas that will cost you build cycles
 

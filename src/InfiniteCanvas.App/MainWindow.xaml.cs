@@ -24,7 +24,6 @@ public partial class MainWindow : Window
 
     private const double MinScale = 0.1;   // 10 %
     private const double MaxScale = 10.0;  // 1000 % (cible du cahier des charges)
-    private const double ShapeThickness = 3;
     private const string AppName = "GreenBoard";
 
     /// <summary>Propriété ISF marquant un trait comme forme géométrique (valeur = nom de l'outil).</summary>
@@ -85,12 +84,18 @@ public partial class MainWindow : Window
     private double _backgroundBuiltScale = double.NaN;
     private readonly Dictionary<BoardBackground, Border> _backgroundPreviews = new();
 
+    // Réglages de l'utilisateur (roue dentée) et sauvegarde automatique
+    private AppSettings _settings = AppSettings.Load();
+    private readonly System.Windows.Threading.DispatcherTimer _autoSaveTimer = new();
+
     public MainWindow()
     {
         InitializeComponent();
         InitInkCanvas();
+        _autoSaveTimer.Tick += (_, _) => AutoSave();
+        ApplySettings(_settings);
 
-        var first = CreatePage(BoardFile.NewId(), "Page 1", new StrokeCollection(), BoardBackground.Blanc);
+        var first = CreatePage(BoardFile.NewId(), "Page 1", new StrokeCollection(), _settings.DefaultBackground);
         _pages.Add(first);
         ActivatePage(first, storeCurrent: false);
 
@@ -137,6 +142,74 @@ public partial class MainWindow : Window
     }
 
     private Color CurrentColor => MyInkCanvas.DefaultDrawingAttributes.Color;
+
+    // =====================================================================
+    // RÉGLAGES, AIDE, SAUVEGARDE AUTOMATIQUE
+    // =====================================================================
+    /// <summary>Applique des réglages au tableau (aussi appelé en direct pendant l'édition des réglages).</summary>
+    private void ApplySettings(AppSettings s)
+    {
+        _settings = s;
+        // Nouvelle instance : les traits existants gardent leurs attributs
+        var da = MyInkCanvas.DefaultDrawingAttributes.Clone();
+        da.Width = da.Height = s.PenThickness;
+        da.FitToCurve = s.PenSmoothing;
+        da.IgnorePressure = !s.PenPressure;
+        MyInkCanvas.DefaultDrawingAttributes = da;
+
+        _autoSaveTimer.Stop();
+        if (s.AutoSaveMinutes > 0)
+        {
+            _autoSaveTimer.Interval = TimeSpan.FromMinutes(s.AutoSaveMinutes);
+            _autoSaveTimer.Start();
+        }
+    }
+
+    // Fenêtre affichée (plein écran) : l'écran de démarrage s'efface
+    private void Window_ContentRendered(object? sender, EventArgs e) => (Application.Current as App)?.HideSplash();
+
+    private void Settings_Click(object sender, RoutedEventArgs e) => ShowSettings();
+    private void Help_Click(object sender, RoutedEventArgs e) => ShowHelp(Views.HelpTab.Features);
+
+    private void ShowSettings()
+    {
+        ReleaseSpace();
+        var dialog = new Views.SettingsWindow(_settings, ApplySettings) { Owner = this };
+        if (dialog.ShowDialog() == true)
+        {
+            ApplySettings(dialog.Result);
+            if (!_settings.Save())
+                MessageBox.Show(this, "Les réglages sont appliqués mais n'ont pas pu être enregistrés sur le disque.", AppName,
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        CanvasContainer.Focus();
+    }
+
+    private void ShowHelp(Views.HelpTab tab)
+    {
+        ReleaseSpace();
+        new Views.HelpWindow(tab) { Owner = this }.ShowDialog();
+        CanvasContainer.Focus();
+    }
+
+    /// <summary>Enregistre en silence un tableau qui a déjà un fichier, hors geste en cours.</summary>
+    private void AutoSave()
+    {
+        if (!_dirty || _currentFile == null || !IsLoaded) return;
+        if (Mouse.LeftButton == MouseButtonState.Pressed || _shapeStroke != null || Keyboard.FocusedElement is TextBox) return;
+        if (OwnedWindows.Count > 0) return; // une fenêtre de dialogue est ouverte
+
+        try
+        {
+            BoardFile.Save(_currentFile, Snapshot());
+            _dirty = false;
+            UpdateTitle();
+        }
+        catch (Exception)
+        {
+            // Échec silencieux : le titre garde « • », la sauvegarde manuelle signalera l'erreur
+        }
+    }
 
     // =====================================================================
     // GESTION DES OUTILS
@@ -282,6 +355,7 @@ public partial class MainWindow : Window
                 case Key.Tab: case Key.PageDown: CyclePage(+1); break;
                 case Key.PageUp: CyclePage(-1); break;
                 case Key.D0: case Key.NumPad0: ResetView(); break;
+                case Key.OemComma: ShowSettings(); break;
                 case Key.OemPlus: case Key.Add: ZoomAtCenter(1.2); break;
                 case Key.OemMinus: case Key.Subtract: ZoomAtCenter(1 / 1.2); break;
                 default: e.Handled = false; break;
@@ -294,6 +368,13 @@ public partial class MainWindow : Window
         if (e.Key is Key.Delete or Key.Back)
         {
             DeleteSelection();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.F1)
+        {
+            ShowHelp(Views.HelpTab.Features);
             e.Handled = true;
             return;
         }
@@ -523,7 +604,7 @@ public partial class MainWindow : Window
 
     private void CanvasContainer_MouseWheel(object sender, MouseWheelEventArgs e)
     {
-        double zoomFactor = e.Delta > 0 ? 1.1 : 1 / 1.1;
+        double zoomFactor = e.Delta > 0 ? _settings.WheelZoomStep : 1 / _settings.WheelZoomStep;
         ZoomAt(e.GetPosition(CanvasContainer), zoomFactor);
         e.Handled = true;
     }
@@ -594,6 +675,9 @@ public partial class MainWindow : Window
     // =====================================================================
     private void CanvasContainer_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
+        // Boutons flottants (réglages, aide) : clic normal, jamais de déplacement de la vue
+        if (e.OriginalSource is Visual source && CornerButtons.IsAncestorOf(source)) return;
+
         CanvasContainer.Focus(); // garde le clavier (Espace, raccourcis) sur la zone de dessin
 
         bool leftPans = e.ChangedButton == MouseButton.Left && (_spaceHeld || _tool == Tool.Pan);
@@ -648,7 +732,7 @@ public partial class MainWindow : Window
 
         _shapeTool = _tool;
         _shapeStart = e.GetPosition(MyInkCanvas);
-        _shapeStroke = new Stroke(BuildShapePoints(_shapeTool, _shapeStart, _shapeStart, false), ShapeAttributes());
+        _shapeStroke = new Stroke(BuildShapePoints(_shapeTool, _shapeStart, _shapeStart, false, _settings.ShapeThickness), ShapeAttributes());
         _shapeStroke.AddPropertyData(ShapeKindProperty, _shapeTool.ToString());
         MyInkCanvas.Strokes.Add(_shapeStroke); // enregistré dans l'historique ; les points suivent ensuite le glisser
         MyInkCanvas.CaptureMouse();
@@ -659,7 +743,7 @@ public partial class MainWindow : Window
     {
         if (_shapeStroke == null) return;
         bool constrain = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
-        _shapeStroke.StylusPoints = BuildShapePoints(_shapeTool, _shapeStart, e.GetPosition(MyInkCanvas), constrain);
+        _shapeStroke.StylusPoints = BuildShapePoints(_shapeTool, _shapeStart, e.GetPosition(MyInkCanvas), constrain, _settings.ShapeThickness);
         e.Handled = true;
     }
 
@@ -675,7 +759,7 @@ public partial class MainWindow : Window
         {
             var size = _shapeTool is Tool.Line or Tool.Arrow ? new Vector(140, 0) : new Vector(140, 100);
             var start = _shapeStart - size / 2;
-            _shapeStroke.StylusPoints = BuildShapePoints(_shapeTool, start, start + size, false);
+            _shapeStroke.StylusPoints = BuildShapePoints(_shapeTool, start, start + size, false, _settings.ShapeThickness);
         }
 
         _shapeStroke = null;
@@ -686,15 +770,15 @@ public partial class MainWindow : Window
     private DrawingAttributes ShapeAttributes() => new()
     {
         Color = CurrentColor,
-        Width = ShapeThickness,
-        Height = ShapeThickness,
+        Width = _settings.ShapeThickness,
+        Height = _settings.ShapeThickness,
         StylusTip = StylusTip.Ellipse,
         FitToCurve = false,     // angles nets
         IgnorePressure = true   // épaisseur régulière
     };
 
     /// <summary>Points du contour de la forme entre deux coins (Maj : carré/cercle, ou angle multiple de 45°).</summary>
-    private static StylusPointCollection BuildShapePoints(Tool tool, Point a, Point b, bool constrain)
+    private static StylusPointCollection BuildShapePoints(Tool tool, Point a, Point b, bool constrain, double thickness)
     {
         var pts = new StylusPointCollection();
         void Add(double x, double y) => pts.Add(new StylusPoint(x, y));
@@ -708,7 +792,7 @@ public partial class MainWindow : Window
             Vector dir = b - a;
             if (tool == Tool.Arrow && dir.Length > 1)
             {
-                double head = Math.Min(Math.Max(16, ShapeThickness * 5), dir.Length * 0.45);
+                double head = Math.Min(Math.Max(16, thickness * 5), dir.Length * 0.45);
                 dir.Normalize();
                 Point h1 = b + Rotate(-dir * head, 28);
                 Point h2 = b + Rotate(-dir * head, -28);
@@ -766,9 +850,8 @@ public partial class MainWindow : Window
     {
         if (MyInkCanvas.Strokes.Count == 0 && MyInkCanvas.Children.Count == 0) return;
 
-        var answer = MessageBox.Show(this, "Effacer tout le contenu du tableau ?\n(Ctrl+Z permet d'annuler.)", AppName,
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (answer != MessageBoxResult.Yes) return;
+        if (_settings.ConfirmClear && MessageBox.Show(this, "Effacer tout le contenu du tableau ?\n(Ctrl+Z permet d'annuler.)", AppName,
+                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
 
         _history.BeginGroup();
         MyInkCanvas.Select(new StrokeCollection());
@@ -1034,7 +1117,7 @@ public partial class MainWindow : Window
     {
         if (!ConfirmSaveChanges()) return;
         LoadDocument(new BoardDocument(
-            [new BoardPageData(BoardFile.NewId(), "Page 1", new StrokeCollection(), [], _background, 1, 0, 0)], 0), null);
+            [new BoardPageData(BoardFile.NewId(), "Page 1", new StrokeCollection(), [], _settings.DefaultBackground, 1, 0, 0)], 0), null);
     }
 
     private void OpenFromCommandLine(IEnumerable<string> args)

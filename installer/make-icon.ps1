@@ -1,4 +1,4 @@
-# Génère l'icône de GreenBoard : tableau vert, symbole ∞ tracé à la craie, stylet ambre.
+﻿# Génère l'icône de GreenBoard : tableau vert, symbole ∞ tracé à la craie, stylet ambre.
 #   src\InfiniteCanvas.App\Assets\GreenBoard.ico  (16 à 256 px, PNG embarqués)
 #   src\InfiniteCanvas.App\Assets\GreenBoard.png  (512 px, pour la documentation et les publications)
 # À lancer avec : pwsh -STA -File installer\make-icon.ps1   (WPF exige un thread STA)
@@ -145,6 +145,92 @@ $ico = Join-Path $assets 'GreenBoard.ico'
 $png = Join-Path $assets 'GreenBoard.png'
 [System.IO.File]::WriteAllBytes($png, (ToPng (Render 512)))
 "Image écrite : $png"
+
+# ---------------------------------------------------------------------------
+# Écran de démarrage (Assets\Splash.png) : carte verte arrondie, ombre transparente, version du csproj
+# ---------------------------------------------------------------------------
+$appProj = Join-Path $root 'src\InfiniteCanvas.App\InfiniteCanvas.App.csproj'
+$version = ([xml](Get-Content $appProj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+
+function Text($dc, [string]$s, [double]$size, $brush, [double]$x, [double]$y, [string]$weight = 'Normal', [string]$family = 'Segoe UI') {
+    $tf = [System.Windows.Media.Typeface]::new([System.Windows.Media.FontFamily]::new($family), [System.Windows.FontStyles]::Normal,
+        [System.Windows.FontWeight]([System.Windows.FontWeights]::$weight), [System.Windows.FontStretches]::Normal)
+    $ft = [System.Windows.Media.FormattedText]::new($s, [Globalization.CultureInfo]::GetCultureInfo('fr-FR'),
+        [System.Windows.FlowDirection]::LeftToRight, $tf, $size, $brush, 1.0)
+    $dc.DrawText($ft, [System.Windows.Point]::new($x, $y))
+    return $ft.Width
+}
+
+function RenderSplash() {
+    $W = 720; $H = 420; $m = 20                      # marge transparente pour l'ombre
+    $card = [System.Windows.Rect]::new($m, $m, $W - 2 * $m, $H - 2 * $m)
+    $visual = [System.Windows.Media.DrawingVisual]::new()
+    $dc = $visual.RenderOpen()
+
+    # Ombre douce (rectangles arrondis concentriques de plus en plus transparents)
+    for ($i = 14; $i -ge 1; $i--) {
+        $r = [System.Windows.Rect]::new($card.X - $i + 2, $card.Y - $i + 6, $card.Width + 2 * $i - 4, $card.Height + 2 * $i - 4)
+        $dc.DrawRoundedRectangle((B '#000000' ([byte](2 + (14 - $i) / 3))), $null, $r, 26 + $i, 26 + $i)
+    }
+
+    # Carte : dégradé vert, quadrillage, reflet
+    $bg = [System.Windows.Media.LinearGradientBrush]::new((C '#388E3C'), (C '#1B5E20'), [System.Windows.Point]::new(0, 0), [System.Windows.Point]::new(1, 1))
+    $dc.DrawRoundedRectangle($bg, $null, $card, 24, 24)
+    $dc.PushClip([System.Windows.Media.RectangleGeometry]::new($card, 24, 24))
+    $grid = P (B '#FFFFFF' 16) 1
+    for ($x = $card.X + 34; $x -lt $card.Right; $x += 34) { $dc.DrawLine($grid, [System.Windows.Point]::new($x, $card.Y), [System.Windows.Point]::new($x, $card.Bottom)) }
+    for ($y = $card.Y + 34; $y -lt $card.Bottom; $y += 34) { $dc.DrawLine($grid, [System.Windows.Point]::new($card.X, $y), [System.Windows.Point]::new($card.Right, $y)) }
+    $shine = [System.Windows.Media.LinearGradientBrush]::new((C '#FFFFFF' 30), (C '#FFFFFF' 0), 90)
+    $dc.DrawRectangle($shine, $null, [System.Windows.Rect]::new($card.X, $card.Y, $card.Width, 150))
+    # Grand ∞ à la craie en filigrane, à droite
+    $dc.PushTransform([System.Windows.Media.MatrixTransform]::new([System.Windows.Media.Matrix]::new(3.6, 0, 0, 3.6, 360, 40)))
+    $dc.DrawGeometry($null, (P (B '#FFFFFF' 22) 5), [System.Windows.Media.Geometry]::Parse($infinity))
+    $dc.Pop()
+    $dc.Pop()
+    $dc.DrawRoundedRectangle($null, (P (B '#FFFFFF' 40) 1.5), [System.Windows.Rect]::new($card.X + 1, $card.Y + 1, $card.Width - 2, $card.Height - 2), 23, 23)
+
+    # Icône
+    $dc.PushTransform([System.Windows.Media.MatrixTransform]::new([System.Windows.Media.Matrix]::new(1.3, 0, 0, 1.3, $m + 46, $m + 52)))
+    $dc.PushClip([System.Windows.Media.RectangleGeometry]::new([System.Windows.Rect]::new(0, 0, 100, 100), 22, 22))
+    $dc.DrawRectangle((B '#000000' 0), $null, [System.Windows.Rect]::new(0, 0, 100, 100))
+    $dc.Pop()
+    Draw $dc $true 7
+    $dc.Pop()
+
+    # Titre et sous-titre
+    $white = [System.Windows.Media.Brushes]::White
+    $soft = B '#FFFFFF' 215
+    $tx = $m + 46 + 130 + 30
+    Text $dc 'GreenBoard' 52 $white $tx ($m + 54) 'SemiBold' | Out-Null
+    Text $dc "Tableau blanc infini pour l'enseignement" 18 $soft $tx ($m + 124) | Out-Null
+    # Pastille de version
+    $vw = Text $dc "Version $version" 13 $white ($tx + 12) ($m + 163) 'SemiBold'
+    $dc.DrawRoundedRectangle((B '#FFFFFF' 40), $null, [System.Windows.Rect]::new($tx, $m + 160, $vw + 24, 24), 12, 12)
+    Text $dc "Version $version" 13 $white ($tx + 12) ($m + 163) 'SemiBold' | Out-Null
+
+    # Bas : auteurs à gauche, éditeur (logo sur pastille blanche) à droite
+    $by = $card.Bottom - 74
+    $dc.DrawLine((P (B '#FFFFFF' 50) 1), [System.Windows.Point]::new($card.X + 46, $by - 18), [System.Windows.Point]::new($card.Right - 46, $by - 18))
+    Text $dc 'CONÇU PAR' 11 (B '#FFFFFF' 170) ($card.X + 46) $by 'SemiBold' | Out-Null
+    Text $dc 'Ferid HELALI + Claude Code' 17 $white ($card.X + 46) ($by + 16) 'SemiBold' | Out-Null
+
+    $logo =[System.Windows.Media.Imaging.BitmapImage]::new([Uri]::new((Join-Path $assets 'AlfaComputers.png')))
+    $lw = 150; $lh = $lw * $logo.PixelHeight / $logo.PixelWidth
+    $pill = [System.Windows.Rect]::new($card.Right - 46 - $lw - 20, $by + 14, $lw + 20, $lh + 2)
+    Text $dc 'ÉDITEUR · ALFA COMPUTERS APPS' 11 (B '#FFFFFF' 170) $pill.X $by 'SemiBold' | Out-Null
+    $dc.DrawRoundedRectangle($white, $null, $pill, 8, 8)
+    $dc.DrawImage($logo, [System.Windows.Rect]::new($pill.X + 10, $pill.Y + 1, $lw, $lh))
+
+    $dc.Close()
+    $bmp = [System.Windows.Media.Imaging.RenderTargetBitmap]::new($W, $H, 96, 96, [System.Windows.Media.PixelFormats]::Pbgra32)
+    $bmp.Render($visual)
+    return $bmp
+}
+
+$splash = Join-Path $assets 'Splash.png'
+[System.IO.File]::WriteAllBytes($splash, (ToPng (RenderSplash)))
+"Écran de démarrage écrit : $splash (version $version)"
+if ($Preview) { Copy-Item $splash (Join-Path $Preview 'splash-apercu.png') -Force }
 
 if ($Preview) {
     # Planche d'aperçu : toutes les tailles, à l'échelle 1, sur fond clair puis sombre

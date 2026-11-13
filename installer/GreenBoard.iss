@@ -15,9 +15,16 @@ AppId={{8C3D6E2A-5B1F-4C7A-9E0D-3F2A1B6C4D57}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
-AppPublisher=GreenBoard
-AppComments=Tableau blanc infini pour l'enseignement
+AppPublisher=Alfa Computers Apps
+AppPublisherURL=https://github.com/feridHelali/GreenBoard
+AppSupportURL=https://github.com/feridHelali/GreenBoard/issues
+AppUpdatesURL=https://github.com/feridHelali/GreenBoard/releases
+AppContact=Ferid HELALI
+AppCopyright=© 2026 Ferid HELALI — Alfa Computers Apps
+AppComments=Tableau blanc infini pour l'enseignement — par Ferid HELALI + Claude Code
 VersionInfoVersion={#AppVersion}
+VersionInfoCompany=Alfa Computers Apps
+VersionInfoDescription=Installateur de GreenBoard
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
@@ -112,6 +119,10 @@ begin
       'Claude Desktop : Paramètres > Développeur > Modifier la configuration, puis ajoutez :' + #13#10 + #13#10 +
       Json + #13#10 + #13#10 +
       'Claude Code : claude mcp add greenboard -- "' + ExpandConstant('{app}\mcp\InfiniteCanvas.Mcp.exe') + '"' + #13#10 + #13#10 +
+      'OpenCode (gratuit) : dans %USERPROFILE%\.config\opencode\opencode.json, ajoutez :' + #13#10 +
+      '  "mcp": { "greenboard": { "type": "local", "command": ["' + Exe + '"], "enabled": true } }' + #13#10 + #13#10 +
+      'Autres assistants MCP (Cursor, VS Code, Continue…) : serveur stdio, commande ci-dessus, sans argument.' + #13#10 +
+      'Mode d''emploi détaillé et 10 demandes types : GreenBoard > Aide (F1) > Assistant IA.' + #13#10 + #13#10 +
       'Gardez GreenBoard ouvert pendant que vous demandez une illustration.' + #13#10;
     SaveStringToFile(ExpandConstant('{app}\mcp\LISEZ-MOI-MCP.txt'), Text, False);
   end;

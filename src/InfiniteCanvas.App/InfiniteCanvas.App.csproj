@@ -18,9 +18,10 @@
     <ApplicationIcon>Assets\GreenBoard.ico</ApplicationIcon>
     <Version>1.0.0</Version>
     <Product>GreenBoard</Product>
-    <Company>GreenBoard</Company>
+    <Company>Alfa Computers Apps</Company>
+    <Authors>Ferid HELALI + Claude Code</Authors>
     <Description>GreenBoard — tableau blanc infini pour l'enseignement</Description>
-    <Copyright>© 2026 GreenBoard</Copyright>
+    <Copyright>© 2026 Ferid HELALI — Alfa Computers Apps</Copyright>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,6 +29,11 @@
     <Resource Include="Assets\GreenBoard.ico" />
     <!-- Logo de la barre d'outils -->
     <Resource Include="Assets\GreenBoard.png" />
+    <!-- Fenêtre « À propos » -->
+    <Resource Include="Assets\AlfaComputers.png" />
+    <Resource Include="Assets\Auteur.png" />
+    <!-- Écran de démarrage (généré par installer\make-icon.ps1, affiché par App.OnStartup) -->
+    <Resource Include="Assets\Splash.png" />
   </ItemGroup>
 
 </Project>
