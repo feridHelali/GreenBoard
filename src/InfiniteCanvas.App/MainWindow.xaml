@@ -37,14 +37,9 @@
 
                 <!-- Logo -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="26" Height="26" CornerRadius="7" Background="{StaticResource AccentBrush}">
-                        <Viewbox Width="16" Height="16">
-                            <Canvas Width="24" Height="24">
-                                <Path Data="{StaticResource IconPen}" Stroke="White" StrokeThickness="2.2"
-                                      StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                            </Canvas>
-                        </Viewbox>
-                    </Border>
+                    <!-- Icône de l'application (générée par installer\make-icon.ps1) -->
+                    <Image Source="Assets/GreenBoard.png" Width="28" Height="28"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
                     <TextBlock Text="GreenBoard" Margin="8,0,0,0" FontSize="15" FontWeight="SemiBold"
                                Foreground="#1F2937" VerticalAlignment="Center"/>
 

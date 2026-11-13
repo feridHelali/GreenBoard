@@ -48,7 +48,11 @@ pwsh -File installer\build-installer.ps1   # tests → self-contained win-x64 pu
   `.gboard` association (task `assoc`, `HKA\Software\Classes`), closes/restarts a running GreenBoard on upgrade.
   **Never change `AppId`** — upgrades and uninstall depend on it. Bump `<Version>` for each release.
 - `GreenBoard.exe "<file>.gboard"` opens the file (`OpenFromCommandLine`, called on `Loaded`).
-- Icon: `src\InfiniteCanvas.App\Assets\GreenBoard.ico`, regenerated with `pwsh -STA -File installer\make-icon.ps1`.
+- Icon (green board, chalk ∞, amber stylus; ≤ 40 px drops grid and stylus): `src\InfiniteCanvas.App\Assets\GreenBoard.ico`
+  + `GreenBoard.png` (512 px, toolbar logo), both regenerated with `pwsh -STA -File installer\make-icon.ps1`
+  (`-Preview <dir>` writes a contact sheet of every size).
+- Self-contained check: `GreenBoard.runtimeconfig.json` must list `includedFrameworks` (not `frameworks`), and
+  native DLLs import only Windows system DLLs or files shipped alongside (WPF brings `vcruntime140_cor3.dll`).
 - The setup exe is not code-signed: Windows SmartScreen warns on first run.
 There is no CI, no lint/format config, no `.editorconfig`, no `global.json`, no `Directory.Build.props` —
 SDK version is whatever is installed (9.0.101 on this machine). WPF means the App project only builds on

@@ -26,6 +26,8 @@
   <ItemGroup>
     <!-- Icône aussi utilisée par les fenêtres (barre de titre, barre des tâches) -->
     <Resource Include="Assets\GreenBoard.ico" />
+    <!-- Logo de la barre d'outils -->
+    <Resource Include="Assets\GreenBoard.png" />
   </ItemGroup>
 
 </Project>
