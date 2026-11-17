@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Ink;
 using InfiniteCanvas.Core.Models;
+using InfiniteCanvas.App.Views;
 using Microsoft.Win32;
 
 namespace InfiniteCanvas.App;
@@ -55,6 +56,11 @@ public partial class MainWindow : Window
     private Tool _tool = Tool.Pen;
     private readonly Dictionary<Tool, RadioButton> _toolButtons = new();
     private BoardPipeServer? _pipeServer;
+
+    // Cloud (GreenBoard Cloud — optionnel, hors-ligne par défaut)
+    private readonly CloudClient _cloudClient = CloudClient.Offline();
+    private CloudAccount _cloudAccount = CloudAccount.Disconnected();
+    private string? _cloudAccessToken;
 
     // Pages (onglets)
     private readonly List<BoardPage> _pages = [];
@@ -122,6 +128,10 @@ public partial class MainWindow : Window
         BtnPen.IsChecked = true;
         UpdateTitle();
 
+        // Charger le compte cloud (hors-ligne par défaut, fichier compte.json s'il existe)
+        LoadCloudAccount();
+        UpdateCloudButton();
+
         Loaded += (_, _) =>
         {
             ResetView();
@@ -183,7 +193,7 @@ public partial class MainWindow : Window
     private void ShowSettings()
     {
         ReleaseSpace();
-        var dialog = new Views.SettingsWindow(_settings, ApplySettings) { Owner = this };
+        var dialog = new Views.SettingsWindow(_settings, ApplySettings, _cloudClient, _cloudAccount) { Owner = this };
         if (dialog.ShowDialog() == true)
         {
             ApplySettings(dialog.Result);
@@ -199,6 +209,154 @@ public partial class MainWindow : Window
         ReleaseSpace();
         new Views.HelpWindow(tab) { Owner = this }.ShowDialog();
         CanvasContainer.Focus();
+    }
+
+    // =====================================================================
+    // CLOUD GREENBOARD (compte optionnel, hors-ligne par défaut)
+    // =====================================================================
+
+    private void LoadCloudAccount()
+    {
+        try
+        {
+            var path = CloudAccountPath.Default;
+            if (File.Exists(path))
+            {
+                var json = File.ReadAllText(path);
+                var saved = DpapiHelper.Deserialize(json);
+                if (saved != null && saved.IsConnected && saved.EncryptedRefreshToken != null)
+                {
+                    // Restaurer le compte (jeton déchiffré avec DPAPI)
+                    var refreshToken = DpapiHelper.Decrypt(saved.EncryptedRefreshToken);
+                    if (refreshToken != null)
+                    {
+                        _cloudAccount = saved with { };
+                        _cloudAccessToken = null; // sera obtenu par refresh au premier usage
+                        // Tenter un refresh silencieux pour obtenir un access token
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                var result = await _cloudClient.RefreshAsync("", refreshToken, default);
+                                if (result != null && !result.IsOffline && result.AccessToken != null)
+                                {
+                                    _cloudAccessToken = result.AccessToken;
+                                    Dispatcher.Invoke(() => { UpdateCloudButton(); UpdateTitle(); });
+                                }
+                            }
+                            catch { /* serveur indisponible : reste hors-ligne */ }
+                        });
+                    }
+                }
+            }
+        }
+        catch { /* compte ignoré si illisible */ }
+    }
+
+    private void UpdateCloudButton()
+    {
+        BtnCloud.IsChecked = _cloudAccount.IsConnected;
+        BtnCloud.ToolTip = _cloudAccount.IsConnected
+            ? $"Connecté ({_cloudAccount.Email}) — Fermer la session"
+            : "Espace cloud GreenBoard — Se connecter";
+    }
+
+    private async void Cloud_Click(object sender, RoutedEventArgs e)
+    {
+        ReleaseSpace();
+
+        if (!_cloudAccount.IsConnected)
+        {
+            var dialog = new Views.AccountWindow(_cloudClient, _cloudAccount) { Owner = this };
+            if (dialog.ShowDialog() == true)
+            {
+                // Recharger le compte depuis le fichier (sauvegardé par AccountWindow)
+                LoadCloudAccount();
+                UpdateCloudButton();
+                UpdateTitle();
+            }
+            return;
+        }
+
+        // Déjà connecté : afficher les tableaux en ligne
+        var boardsWindow = new Views.OnlineBoardsWindow(_cloudClient, _cloudAccount, (data, title) =>
+        {
+            // Ouvrir le document .gboard téléchargé
+            try
+            {
+                var doc = BoardFile.LoadFromBytes(data);
+                LoadDocument(doc, null);
+                _currentFile = null; // fichier cloud : pas de chemin local
+                _dirty = false;
+                UpdateTitle();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Impossible d'ouvrir le tableau :\n{ex.Message}", AppName,
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        });
+        boardsWindow.SetAccessToken(_cloudAccessToken ?? "");
+        var result = boardsWindow.ShowDialog();
+        if (result == false)
+        {
+            // Déconnexion demandée
+            _cloudAccount = CloudAccount.Disconnected();
+            _cloudAccessToken = null;
+            try { File.Delete(CloudAccountPath.Default); } catch { }
+            UpdateCloudButton();
+            UpdateTitle();
+        }
+    }
+
+    private async Task SaveToCloudAsync()
+    {
+        if (!_cloudAccount.IsConnected)
+        {
+            MessageBox.Show(this, "Veuillez vous connecter à votre compte GreenBoard Cloud d'abord.",
+                AppName, MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var pages = BuildExportPages();
+        int active = _pages.IndexOf(Page);
+        if (pages.All(p => p.IsEmpty))
+        {
+            MessageBox.Show(this, "Le tableau est vide : rien à enregistrer.", AppName,
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        string boardName = _currentFile == null ? Page.Title : Path.GetFileNameWithoutExtension(_currentFile);
+        var nameDialog = new NameInputDialog(boardName) { Owner = this };
+        if (nameDialog.ShowDialog() != true || string.IsNullOrWhiteSpace(nameDialog.DialogName)) return;
+        boardName = nameDialog.DialogName;
+
+        try
+        {
+            Mouse.OverrideCursor = Cursors.Wait;
+            var docBytes = BoardFile.SerializeToBytes(Snapshot());
+            var result = await _cloudClient.UploadDocumentAsync(_cloudAccessToken ?? "", boardName, docBytes, pages.Count, default);
+            if (result != null)
+            {
+                MessageBox.Show(this, $"Tableau « {boardName} » enregistré dans votre espace cloud.",
+                    AppName, MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else
+            {
+                MessageBox.Show(this, "Échec de l'enregistrement dans le cloud (serveur indisponible).",
+                    AppName, MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Erreur : {ex.Message}", AppName,
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            Mouse.OverrideCursor = null;
+        }
     }
 
     /// <summary>Enregistre en silence un tableau qui a déjà un fichier, hors geste en cours.</summary>
@@ -356,6 +514,7 @@ public partial class MainWindow : Window
                 case Key.Z: _history.Redo(); e.Handled = true; break; // Ctrl+Maj+Z = Rétablir
                 case Key.S: SaveAs(); e.Handled = true; break;
                 case Key.E: _ = ShareBoardAsync(); e.Handled = true; break;
+                case Key.U: _ = SaveToCloudAsync(); e.Handled = true; break;
                 case Key.Tab: CyclePage(-1); e.Handled = true; break;
             }
             return;
@@ -1239,7 +1398,8 @@ public partial class MainWindow : Window
     private void UpdateTitle()
     {
         string name = _currentFile == null ? "Sans titre" : Path.GetFileNameWithoutExtension(_currentFile);
-        Title = $"{name}{(_dirty ? " •" : "")} — {AppName}";
+        string cloudSuffix = _cloudAccount.IsConnected ? " ☁" : "";
+        Title = $"{name}{(_dirty ? " •" : "")}{cloudSuffix} — {AppName}";
     }
 
     private static IEnumerable<Image> ItemsOf(IEnumerable<UIElement> elements) =>

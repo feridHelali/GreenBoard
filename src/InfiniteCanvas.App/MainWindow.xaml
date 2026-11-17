@@ -54,6 +54,7 @@
                     <Button Content="{StaticResource IconImage}" Style="{StaticResource IconButtonStyle}" Click="ImportImage_Click" ToolTip="Importer une image PNG / JPEG… (ou glisser-déposer, Ctrl V)"/>
                     <Button Content="{StaticResource IconExport}" Style="{StaticResource IconButtonStyle}" Click="Export_Click" ToolTip="Exporter en PNG, JPEG, SVG ou PDF… (Ctrl E)"/>
                     <Button Content="{StaticResource IconShare}" Style="{StaticResource IconButtonStyle}" Click="Share_Click" ToolTip="Partager par e-mail en PDF… (Ctrl Maj E)"/>
+                    <ToggleButton x:Name="BtnCloud" Content="{StaticResource IconCloud}" Style="{StaticResource IconToggleStyle}" Click="Cloud_Click" ToolTip="Espace cloud GreenBoard (Ctrl Maj U)"/>
                 </StackPanel>
 
                 <!-- Outils -->

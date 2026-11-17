@@ -186,6 +186,94 @@ public static class BoardFile
 
     public static string NewId() => Guid.NewGuid().ToString("N")[..12];
 
+    /// <summary>Charge un document .gboard depuis un tableau d'octets (ex. téléchargement cloud).</summary>
+    public static BoardDocument LoadFromBytes(byte[] data)
+    {
+        using var ms = new MemoryStream(data);
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
+        return Load(zip);
+    }
+
+    /// <summary>Sérialise un document en tableau d'octets .gboard (ex. envoi cloud).</summary>
+    public static byte[] SerializeToBytes(BoardDocument doc)
+    {
+        using var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create))
+        {
+            var meta = new Meta { ActivePage = doc.ActivePage, Pages = [] };
+
+            for (int p = 0; p < doc.Pages.Count; p++)
+            {
+                var page = doc.Pages[p];
+                string folder = $"pages/{p}";
+                var pageMeta = new PageMeta
+                {
+                    Id = page.Id, Title = page.Title, Ink = $"{folder}/ink.isf",
+                    Background = page.Background, Scale = page.Scale,
+                    TranslateX = page.TranslateX, TranslateY = page.TranslateY
+                };
+
+                using (var ink = zip.CreateEntry(pageMeta.Ink, CompressionLevel.Optimal).Open())
+                    page.Strokes.Save(ink, compress: true);
+
+                for (int i = 0; i < page.Items.Count; i++)
+                {
+                    var item = page.Items[i];
+                    string name = $"{folder}/items/{i}{ImageExtension(item.Data)}";
+                    using (var entry = zip.CreateEntry(name, CompressionLevel.NoCompression).Open())
+                        entry.Write(item.Data);
+                    pageMeta.Items.Add(new ItemMeta
+                    {
+                        Id = item.Id, File = name, Label = item.Label,
+                        X = item.Bounds.X, Y = item.Bounds.Y, Width = item.Bounds.Width, Height = item.Bounds.Height
+                    });
+                }
+                if (page.Texts is { Count: > 0 } texts)
+                    pageMeta.Texts = texts.Select(t => new TextMeta
+                    {
+                        Id = t.Id, Text = t.Text, FontSize = t.FontSize,
+                        Color = t.Color.ToString(CultureInfo.InvariantCulture),
+                        X = t.Bounds.X, Y = t.Bounds.Y, Width = t.Bounds.Width, Height = t.Bounds.Height
+                    }).ToList();
+                meta.Pages.Add(pageMeta);
+            }
+
+            using var json = zip.CreateEntry("board.json", CompressionLevel.Optimal).Open();
+            JsonSerializer.Serialize(json, meta, JsonOptions);
+        }
+        return ms.ToArray();
+    }
+
+    private static BoardDocument Load(ZipArchive zip)
+    {
+        var metaEntry = zip.GetEntry("board.json") ?? throw new InvalidDataException("board.json manquant.");
+        Meta meta;
+        using (var json = metaEntry.Open())
+            meta = JsonSerializer.Deserialize<Meta>(json, JsonOptions) ?? new Meta();
+        if (meta.Version > CurrentVersion)
+            throw new InvalidDataException("Ce fichier a été créé par une version plus récente de GreenBoard.");
+
+        var pages = new List<BoardPageData>();
+        if (meta.Pages is { Count: > 0 })
+        {
+            foreach (var p in meta.Pages)
+                pages.Add(new BoardPageData(
+                    string.IsNullOrEmpty(p.Id) ? NewId() : p.Id,
+                    string.IsNullOrWhiteSpace(p.Title) ? $"Page {pages.Count + 1}" : p.Title,
+                    ReadStrokes(zip, p.Ink), ReadItems(zip, p.Items),
+                    p.Background, p.Scale, p.TranslateX, p.TranslateY, ReadTexts(p.Texts)));
+        }
+        else
+        {
+            // Versions 1 et 2 : une seule page à la racine de l'archive
+            pages.Add(new BoardPageData(NewId(), "Page 1",
+                ReadStrokes(zip, "ink.isf"), ReadItems(zip, meta.Items ?? []),
+                meta.Background, meta.Scale, meta.TranslateX, meta.TranslateY));
+        }
+
+        return new BoardDocument(pages, Math.Clamp(meta.ActivePage, 0, pages.Count - 1));
+    }
+
     private static StrokeCollection ReadStrokes(ZipArchive zip, string entryName)
     {
         var entry = zip.GetEntry(entryName);

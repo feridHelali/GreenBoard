@@ -1,4 +1,5 @@
-﻿using System.Windows;
+﻿using System.IO;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -13,14 +14,18 @@ public partial class SettingsWindow : Window
 {
     private readonly AppSettings _original;
     private readonly Action<AppSettings> _apply;
+    private readonly CloudClient _cloudClient;
+    private CloudAccount _cloudAccount;
     private bool _loading;
     private bool _saved;
 
-    public SettingsWindow(AppSettings current, Action<AppSettings> apply)
+    public SettingsWindow(AppSettings current, Action<AppSettings> apply, CloudClient cloudClient, CloudAccount cloudAccount)
     {
         InitializeComponent();
         _original = current;
         _apply = apply;
+        _cloudClient = cloudClient;
+        _cloudAccount = cloudAccount;
 
         foreach (var bg in Enum.GetValues<BoardBackground>())
             BackgroundCombo.Items.Add(new ComboBoxItem { Content = BoardBackgrounds.Label(bg), Tag = bg });
@@ -32,6 +37,7 @@ public partial class SettingsWindow : Window
             });
 
         Show(current);
+        RefreshAccountStatus();
         Closed += (_, _) => { if (!_saved) _apply(_original); };
     }
 
@@ -123,6 +129,47 @@ public partial class SettingsWindow : Window
     private void ConnectAssistant_Click(object sender, RoutedEventArgs e) =>
         new HelpWindow(HelpTab.Assistant) { Owner = this }.ShowDialog();
 
+    private void Account_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_cloudAccount.IsConnected)
+        {
+            var dialog = new AccountWindow(_cloudClient, _cloudAccount) { Owner = this };
+            if (dialog.ShowDialog() == true)
+            {
+                RefreshAccountStatus();
+            }
+        }
+        else
+        {
+            if (MessageBox.Show(this, "Voulez-vous fermer la session cloud ? Votre compte sera déconnecté.",
+                    "GreenBoard", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+            {
+                // Déconnecter : effacer le fichier de compte
+                try { File.Delete(CloudAccountPath.Default); } catch { }
+                _cloudAccount = CloudAccount.Disconnected();
+                RefreshAccountStatus();
+            }
+        }
+    }
+
+    private void RefreshAccountStatus()
+    {
+        if (_cloudAccount.IsConnected)
+        {
+            AccountButton.Content = "Fermer la session";
+            AccountStatus.Text = $"Connecté en tant que {_cloudAccount.Email} — {(_cloudClient.IsOffline ? "(serveur non configuré, mode hors-ligne)" : "")}";
+            AccountStatus.Foreground = (Brush)FindResource("AccentBrush");
+        }
+        else
+        {
+            AccountButton.Content = "Se connecter";
+            AccountStatus.Text = _cloudClient.IsOffline
+                ? "Non connecté — serveur cloud non configuré (mode hors-ligne)."
+                : "Non connecté — GreenBoard reste 100 % local.";
+            AccountStatus.Foreground = (Brush)FindResource("IconBrush");
+        }
+    }
+
     private void Defaults_Click(object sender, RoutedEventArgs e) => Show(new AppSettings());
 
     private void Save_Click(object sender, RoutedEventArgs e)
@@ -132,3 +179,4 @@ public partial class SettingsWindow : Window
         DialogResult = true;
     }
 }
+

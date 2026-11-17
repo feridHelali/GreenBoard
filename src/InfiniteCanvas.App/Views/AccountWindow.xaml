@@ -1,0 +1,80 @@
+<Window x:Class="InfiniteCanvas.App.Views.AccountWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Compte GreenBoard" Width="420" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" ShowInTaskbar="False"
+        Background="White" FontSize="13">
+    <Window.Resources>
+        <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Padding" Value="6,5" />
+            <Setter Property="Foreground" Value="#1F2937" />
+            <Setter Property="BorderBrush" Value="#D1D5DB" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style TargetType="PasswordBox">
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Padding" Value="6,5" />
+            <Setter Property="Foreground" Value="#1F2937" />
+            <Setter Property="BorderBrush" Value="#D1D5DB" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Margin" Value="0,4,0,0" />
+            <Setter Property="Foreground" Value="#1F2937" />
+        </Style>
+        <Style x:Key="RowLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#1F2937" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </Window.Resources>
+
+    <Border Padding="24,20,24,20">
+        <StackPanel>
+            <!-- En-tête -->
+            <StackPanel Orientation="Horizontal">
+                <Border Width="34" Height="34" CornerRadius="9" Background="{StaticResource AccentSoftBrush}">
+                    <Viewbox Width="20" Height="20">
+                        <Canvas Width="24" Height="24">
+                            <Path Data="{StaticResource IconInfo}" Stroke="{StaticResource AccentBrush}" StrokeThickness="1.8"
+                                  StrokeLineJoin="Round"/>
+                        </Canvas>
+                    </Viewbox>
+                </Border>
+                <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="Compte GreenBoard" Style="{StaticResource DialogTitle}"/>
+                    <TextBlock Style="{StaticResource DialogHint}" Text="Créez un compte ou connectez-vous pour accéder à vos tableaux depuis n'importe quel PC."/>
+                </StackPanel>
+            </StackPanel>
+
+            <TextBlock Text="{Binding StatusMessage, Mode=OneWay}" Style="{StaticResource DialogHint}" Margin="0,12,0,0"
+                       Foreground="{Binding StatusColor, Mode=OneWay}"/>
+
+            <!-- Formulaire -->
+            <StackPanel Margin="0,12,0,0">
+                <TextBlock Text="E-mail" Style="{StaticResource RowLabel}" Margin="0,0,0,4"/>
+                <TextBox x:Name="EmailBox" TabIndex="0"/>
+
+                <TextBlock Text="Mot de passe" Style="{StaticResource RowLabel}" Margin="0,12,0,4"/>
+                <PasswordBox x:Name="PasswordBox" TabIndex="1"/>
+
+                <TextBlock Text="Nom affiché (facultatif)" Style="{StaticResource RowLabel}" Margin="0,12,0,4"/>
+                <TextBox x:Name="DisplayNameBox" TabIndex="2"/>
+
+                <CheckBox x:Name="RememberBox" Content="Rester connecté (jeton mémorisé)" TabIndex="3" IsChecked="True"/>
+            </StackPanel>
+
+            <!-- Boutons -->
+            <DockPanel Margin="0,20,0,0" LastChildFill="False">
+                <Button DockPanel.Dock="Left" Content="Créer un compte" Style="{StaticResource DialogButtonStyle}"
+                        Click="Register_Click" TabIndex="4"/>
+                <Button DockPanel.Dock="Right" Content="Se connecter" Style="{StaticResource PrimaryButtonStyle}"
+                        IsDefault="True" Click="Login_Click" TabIndex="5"/>
+                <Button DockPanel.Dock="Right" Content="Annuler" Style="{StaticResource DialogButtonStyle}" IsCancel="True" Margin="0,0,8,0" TabIndex="6"/>
+            </DockPanel>
+
+            <TextBlock Style="{StaticResource DialogHint}" Margin="0,12,0,0"
+                       Text="Sans compte, GreenBoard reste 100 % local et hors ligne. Aucun envoi n'a lieu sans votre action."/>
+        </StackPanel>
+    </Border>
+</Window>

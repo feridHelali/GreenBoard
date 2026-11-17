@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: infinitecanvas-api
+    env: docker
+    region: frankfurt
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./
+    healthCheckPath: /health
+    envVars:
+      - key: ConnectionStrings__DefaultConnection
+        fromDatabase:
+          name: infinitecanvas-db
+          property: connectionString
+      - key: Jwt__Key
+        generateValue: true
+      - key: Jwt__Issuer
+        value: https://infinitecanvas-api.onrender.com
+      - key: Jwt__Audience
+        value: greenboard-app
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+    healthCheckPath: /health
+
+databases:
+  - name: infinitecanvas-db
+    databaseName: infinitecanvas
+    user: infinitecanvas
+    plan: starter

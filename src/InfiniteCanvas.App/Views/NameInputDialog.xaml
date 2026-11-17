@@ -1,0 +1,18 @@
+<Window x:Class="InfiniteCanvas.App.Views.NameInputDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Nom du tableau" Width="400" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" ShowInTaskbar="False"
+        Background="White" FontSize="13">
+    <Border Padding="24,20,24,20">
+        <StackPanel>
+            <TextBlock Text="Donner un nom au tableau dans votre espace cloud :" Style="{StaticResource DialogTitle}" Margin="0,0,0,12"/>
+            <TextBox x:Name="NameBox" TabIndex="0"/>
+            <DockPanel Margin="0,18,0,0" LastChildFill="False">
+                <Button DockPanel.Dock="Right" Content="OK" Style="{StaticResource PrimaryButtonStyle}"
+                        IsDefault="True" Click="Ok_Click" TabIndex="1"/>
+                <Button DockPanel.Dock="Right" Content="Annuler" Style="{StaticResource DialogButtonStyle}" IsCancel="True" Margin="0,0,8,0" TabIndex="2"/>
+            </DockPanel>
+        </StackPanel>
+    </Border>
+</Window>
