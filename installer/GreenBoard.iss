@@ -117,6 +117,8 @@ const
 var
   LicWizardPage: TWizardPage;
   LicenceEdit: TEdit;
+  LicenceSkipButton: TButton;
+  LicenceSkipped: Boolean;
 
 function CharIndex(const AChar: Char; const AString: String): Integer;
 var
@@ -186,6 +188,8 @@ begin
   SaveStringToFile(LicenceFilePath, Json, False);
 end;
 
+procedure LicenceSkipClick(Sender: TObject); forward;
+
 procedure InitializeWizard();
 begin
   // Page de clé de licence (toujours affichée)
@@ -218,6 +222,49 @@ begin
     Height := ScaleY(16);
     Caption := 'Format : GB-XXXXX-XXXXX-XXXXX-XXXXX (ex. GB-A3F9K-2M7P4-V8R1W-6T5N9)';
     Font.Color := clGrayText;
+  end;
+
+  LicenceSkipButton := TButton.Create(WizardForm);
+  LicenceSkipButton.Parent := LicWizardPage.Surface;
+  LicenceSkipButton.Left := ScaleX(80);
+  LicenceSkipButton.Top := ScaleY(180);
+  LicenceSkipButton.Width := ScaleX(160);
+  LicenceSkipButton.Height := ScaleY(28);
+  LicenceSkipButton.Caption := 'Passer (mode démo 30 jours)';
+  LicenceSkipButton.OnClick := @LicenceSkipClick;
+end;
+
+procedure LicenceSkipClick(Sender: TObject);
+begin
+  LicenceSkipped := True;
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  LicenceKey: String;
+begin
+  Result := True;
+  if CurPageID = LicWizardPage.ID then
+  begin
+    if LicenceSkipped then
+    begin
+      Result := True;
+      Exit;
+    end;
+    LicenceKey := Trim(LicenceEdit.Text);
+    if LicenceKey <> '' then
+    begin
+      if not IsValidLicenceKey(LicenceKey) then
+      begin
+        MsgBox('Clé de licence invalide.' + #13#10 +
+               'Format attendu : GB-XXXXX-XXXXX-XXXXX-XXXXX' + #13#10 +
+               'Exemple : GB-A3F9K-2M7P4-V8R1W-6T5N9',
+               mbError, MB_OK);
+        Result := False;
+        Exit;
+      end;
+    end;
+    // Clé vide → mode démo (30 jours), on autorise la suite
   end;
 end;
 
