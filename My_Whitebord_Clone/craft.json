@@ -1,0 +1,28 @@
+{
+  "version": 5,
+  "name": "AppxBlockMap",
+  "request": "A similar features a 95% with a little customization",
+  "target": {
+    "kind": "local",
+    "path": "C:\\Program Files\\WindowsApps\\Microsoft.Whiteboard_56.20201.588.0_x64__8wekyb3d8bbwe\\AppxBlockMap.xml"
+  },
+  "stack": "",
+  "status": "needs_you",
+  "note": "Craft Anything can't set up its tools on localhost: the computer refused the connection. Check that its ssh server is running and the port is right.",
+  "created_ms": 1794519739934,
+  "updated_ms": 1794521087574,
+  "checks": [],
+  "agent_session": null,
+  "allowed_actions": [],
+  "last_reply": "",
+  "asset_budget_usd": 5.0,
+  "generate_assets": false,
+  "builder": "Claude Code on localhost",
+  "approvals": {
+    "web": "allow",
+    "commands": "allow",
+    "outside_files": "allow",
+    "publish": "allow",
+    "other_tools": "allow"
+  }
+}

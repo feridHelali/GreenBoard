@@ -20,6 +20,43 @@ public partial class App : Application
         _splash = new SplashScreen("Assets/Splash.png");
         _splash.Show(autoClose: false, topMost: true);
         base.OnStartup(e);
+
+        // Vérification de la licence avant d'ouvrir la fenêtre principale
+        var (allowed, message) = LicenseManager.Check();
+
+        if (!allowed)
+        {
+            // Démo expirée : forcer la saisie d'une clé ou quitter
+            _splash?.Close(TimeSpan.FromMilliseconds(0));
+            var dlg = new Views.LicenceKeyWindow();
+            if (dlg.ShowDialog() == true)
+            {
+                // Clé valide saisie : ouvrir la fenêtre principale
+                var main = new MainWindow();
+                MainWindow = main;
+                main.Show();
+            }
+            else
+            {
+                // Utilisateur a annulé : quitter l'application
+                Shutdown();
+            }
+            return;
+        }
+
+        // Clé valide ou démo encore valide : ouvrir normalement
+        var mainWindow = new MainWindow();
+        MainWindow = mainWindow;
+        mainWindow.Show();
+
+        // Afficher un rappel de démo si nécessaire
+        if (!string.IsNullOrEmpty(message))
+        {
+            _ = System.Windows.MessageBox.Show(mainWindow, message, "GreenBoard — version d'essai",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        }
+
+        _splash?.Close(TimeSpan.FromMilliseconds(350));
     }
 
     /// <summary>Appelé par la fenêtre principale une fois affichée : fondu de l'écran de démarrage.</summary>
