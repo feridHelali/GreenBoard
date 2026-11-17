@@ -174,24 +174,23 @@ end;
 
 procedure SaveLicenceKey(const Key: String);
 var
-  Dir, Json, DateStr: String;
+  Dir, Json: String;
 begin
   Dir := AddBackslash(AppDataPath) + AddBackslash(LicenceAppData);
   if not DirExists(Dir) then CreateDir(Dir);
-  GetDateTimeString('yyyy-mm-dd', 'hh:nn:ss', DateStr);
   Json := '{' + #13#10 +
           '  "key": "' + Key + '",' + #13#10 +
-          '  "activatedAt": "' + DateStr + '",' + #13#10 +
-          '  "firstRun": "' + DateStr + '"' + #13#10 +
+          '  "activatedAt": "",' + #13#10 +
+          '  "firstRun": ""' + #13#10 +
           '}';
   SaveStringToFile(LicenceFilePath, Json, False);
 end;
 
 procedure InitializeWizard();
 begin
-  // Page de clé de licence
+  // Page de clé de licence (toujours affichée)
   LicWizardPage := CreateCustomPage(wpWelcome, 'Clé de licence GreenBoard', 'Entrez votre clé de licence pour activer GreenBoard. Sans clé, une version d''essai de 30 jours sera activée.');
-
+  
   LicenceEdit := TEdit.Create(WizardForm);
   LicenceEdit.Parent := LicWizardPage.Surface;
   LicenceEdit.Left := ScaleX(80);
@@ -228,7 +227,7 @@ var
 begin
   if (CurStep = ssPostInstall) then
   begin
-    // Sauvegarder la clé de licence si fournie
+    // Sauvegarder la clé de licence si fournie (ou déjà existante)
     LicenceKey := Trim(LicenceEdit.Text);
     if LicenceKey <> '' then
       SaveLicenceKey(LicenceKey);
@@ -261,4 +260,8 @@ begin
 end;
 
 [UninstallDelete]
-Type: files; Name: "{app}\mcp\LISEZ-MOI-MCP.txt"
+; Supprimer le dossier MCP complet (fichiers et sous-dossiers)
+Type: filesandordirs; Name: "{app}\mcp"
+; Note : licence.json est conservé dans %APPDATA%\GreenBoard\ pour que la clé
+; soit retrouvée automatiquement lors d'une réinstallation.
+
