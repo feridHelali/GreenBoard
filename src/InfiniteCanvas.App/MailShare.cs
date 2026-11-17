@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.IO;
 using System.Net.Mail;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 
 namespace InfiniteCanvas.App;
@@ -15,11 +14,11 @@ public sealed record ShareRequest(
     string FileName);
 
 /// <summary>
-/// Partage par e-mail via le logiciel de messagerie de l'utilisateur.
+/// Partage par e-mail.
 /// GreenBoard n'envoie rien lui-même et ne stocke aucun mot de passe : il prépare un nouveau message
-/// (destinataires, objet, texte, PDF joint) que l'utilisateur relit puis envoie.
-/// 1. Simple MAPI (<c>MAPISendMailW</c>) : Outlook classique, Thunderbird… — pièce jointe automatique.
-/// 2. Sinon (nouvel Outlook, webmail, pas de client) : lien <c>mailto:</c> + dossier du PDF ouvert.
+/// (destinataires, objet, texte) dans la messagerie par défaut de l'utilisateur via le protocole mailto:,
+/// et copie le chemin du PDF dans le presse-papier pour qu'il puisse être joint facilement.
+/// Aucun client de messagerie spécifique (Outlook, Thunderbird…) n'est imposé.
 /// </summary>
 public static class MailShare
 {
@@ -58,131 +57,7 @@ public static class MailShare
     }
 
     // =====================================================================
-    // 1. Simple MAPI : nouveau message du logiciel de messagerie, PDF joint
-    // =====================================================================
-    public enum MapiOutcome { Shown, Cancelled, Unavailable }
-
-    /// <summary>
-    /// Ouvre la fenêtre de rédaction du client de messagerie par défaut (bloquant tant qu'elle est ouverte
-    /// pour certains clients : à appeler hors du thread de l'interface).
-    /// </summary>
-    public static MapiOutcome ComposeWithMailClient(ShareRequest request, string pdfPath, out int mapiCode)
-    {
-        var allocations = new List<Action>(); // libérations à faire, dans l'ordre
-        var recipients = request.Recipients.Select(r => new MapiRecipDescW
-        {
-            ulRecipClass = MAPI_TO,
-            lpszName = r,
-            lpszAddress = "SMTP:" + r
-        }).ToArray();
-        var file = new MapiFileDescW
-        {
-            nPosition = -1, // pièce jointe en fin de message
-            lpszPathName = pdfPath,
-            lpszFileName = Path.GetFileName(pdfPath)
-        };
-
-        try
-        {
-            var message = new MapiMessageW
-            {
-                lpszSubject = request.Subject,
-                lpszNoteText = request.Body,
-                nRecipCount = recipients.Length,
-                lpRecips = ToNativeArray(recipients, allocations),
-                nFileCount = 1,
-                lpFiles = ToNativeArray([file], allocations)
-            };
-
-            mapiCode = MAPISendMailW(IntPtr.Zero, IntPtr.Zero, message, MAPI_LOGON_UI | MAPI_DIALOG, 0);
-        }
-        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
-        {
-            mapiCode = -1;
-            return MapiOutcome.Unavailable;
-        }
-        finally
-        {
-            foreach (var free in allocations) free();
-        }
-
-        return mapiCode switch
-        {
-            SUCCESS_SUCCESS => MapiOutcome.Shown,
-            MAPI_USER_ABORT => MapiOutcome.Cancelled,
-            _ => MapiOutcome.Unavailable
-        };
-    }
-
-    /// <summary>
-    /// Copie un tableau de structures en mémoire native. La libération (chaînes copiées par le marshaling,
-    /// puis le bloc lui-même) est ajoutée à <paramref name="allocations"/>.
-    /// </summary>
-    private static IntPtr ToNativeArray<T>(T[] items, List<Action> allocations) where T : struct
-    {
-        int size = Marshal.SizeOf<T>();
-        IntPtr block = Marshal.AllocHGlobal(size * items.Length);
-        for (int i = 0; i < items.Length; i++)
-            Marshal.StructureToPtr(items[i], block + i * size, false);
-
-        allocations.Add(() =>
-        {
-            for (int i = 0; i < items.Length; i++) Marshal.DestroyStructure<T>(block + i * size);
-            Marshal.FreeHGlobal(block);
-        });
-        return block;
-    }
-
-    private const int SUCCESS_SUCCESS = 0;
-    private const int MAPI_USER_ABORT = 1;
-    private const int MAPI_LOGON_UI = 0x1;
-    private const int MAPI_DIALOG = 0x8;
-    private const int MAPI_TO = 1;
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private sealed class MapiMessageW
-    {
-        public int ulReserved;
-        public string? lpszSubject;
-        public string? lpszNoteText;
-        public string? lpszMessageType;
-        public string? lpszDateReceived;
-        public string? lpszConversationID;
-        public int flFlags;
-        public IntPtr lpOriginator;
-        public int nRecipCount;
-        public IntPtr lpRecips;
-        public int nFileCount;
-        public IntPtr lpFiles;
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct MapiRecipDescW
-    {
-        public int ulReserved;
-        public int ulRecipClass;
-        public string? lpszName;
-        public string? lpszAddress;
-        public int ulEIDSize;
-        public IntPtr lpEntryID;
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct MapiFileDescW
-    {
-        public int ulReserved;
-        public int flFlags;
-        public int nPosition;
-        public string? lpszPathName;
-        public string? lpszFileName;
-        public IntPtr lpFileType;
-    }
-
-    [DllImport("mapi32.dll", CharSet = CharSet.Unicode)]
-    private static extern int MAPISendMailW(IntPtr session, IntPtr uiParam, MapiMessageW message, int flags, int reserved);
-
-    // =====================================================================
-    // 2. Solution de repli : mailto + dossier du PDF
+    // mailto: — ouvre la messagerie par défaut de l'utilisateur sans forcer Outlook
     // =====================================================================
 
     /// <summary>Lien mailto (destinataires, objet, texte). Les pièces jointes ne passent pas par mailto.</summary>
@@ -193,10 +68,41 @@ public static class MailShare
         return $"mailto:{to}?subject={Uri.EscapeDataString(request.Subject)}&body={Uri.EscapeDataString(body)}";
     }
 
-    public static void OpenMailtoAndRevealFile(ShareRequest request, string pdfPath)
+    /// <summary>
+    /// Ouvre le message mailto dans la messagerie par défaut, copie le chemin du PDF dans le presse-papier
+    /// et affiche le dossier contenant le PDF pour un glisser-déposer facile en pièce jointe.
+    /// </summary>
+    public static void OpenMailAndRevealFile(ShareRequest request, string pdfPath)
     {
-        Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{pdfPath}\"") { UseShellExecute = true });
-        Process.Start(new ProcessStartInfo(BuildMailto(request)) { UseShellExecute = true });
+        // Ouvrir le nouveau message dans la messagerie par défaut (mailto:)
+        try
+        {
+            Process.Start(new ProcessStartInfo(BuildMailto(request)) { UseShellExecute = true });
+        }
+        catch
+        {
+            // Ignoré : le message d'erreur est géré par l'appelant
+        }
+
+        // Copier le chemin du PDF dans le presse-papier (facilite le collage en pièce jointe)
+        try
+        {
+            System.Windows.Clipboard.SetText(pdfPath);
+        }
+        catch
+        {
+            // Ignoré : le presse-papier n'est pas essentiel
+        }
+
+        // Ouvrir le dossier contenant le PDF pour glisser-déposer facilement
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{pdfPath}\"") { UseShellExecute = true });
+        }
+        catch
+        {
+            // Ignoré
+        }
     }
 
     // =====================================================================

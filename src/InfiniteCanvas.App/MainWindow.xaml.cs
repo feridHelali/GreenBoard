@@ -57,11 +57,6 @@ public partial class MainWindow : Window
     private readonly Dictionary<Tool, RadioButton> _toolButtons = new();
     private BoardPipeServer? _pipeServer;
 
-    // Cloud (GreenBoard Cloud — optionnel, hors-ligne par défaut)
-    private readonly CloudClient _cloudClient = CloudClient.Offline();
-    private CloudAccount _cloudAccount = CloudAccount.Disconnected();
-    private string? _cloudAccessToken;
-
     // Pages (onglets)
     private readonly List<BoardPage> _pages = [];
     private BoardPage? _page;
@@ -128,10 +123,6 @@ public partial class MainWindow : Window
         BtnPen.IsChecked = true;
         UpdateTitle();
 
-        // Charger le compte cloud (hors-ligne par défaut, fichier compte.json s'il existe)
-        LoadCloudAccount();
-        UpdateCloudButton();
-
         Loaded += (_, _) =>
         {
             ResetView();
@@ -193,7 +184,7 @@ public partial class MainWindow : Window
     private void ShowSettings()
     {
         ReleaseSpace();
-        var dialog = new Views.SettingsWindow(_settings, ApplySettings, _cloudClient, _cloudAccount) { Owner = this };
+        var dialog = new Views.SettingsWindow(_settings, ApplySettings) { Owner = this };
         if (dialog.ShowDialog() == true)
         {
             ApplySettings(dialog.Result);
@@ -209,154 +200,6 @@ public partial class MainWindow : Window
         ReleaseSpace();
         new Views.HelpWindow(tab) { Owner = this }.ShowDialog();
         CanvasContainer.Focus();
-    }
-
-    // =====================================================================
-    // CLOUD GREENBOARD (compte optionnel, hors-ligne par défaut)
-    // =====================================================================
-
-    private void LoadCloudAccount()
-    {
-        try
-        {
-            var path = CloudAccountPath.Default;
-            if (File.Exists(path))
-            {
-                var json = File.ReadAllText(path);
-                var saved = DpapiHelper.Deserialize(json);
-                if (saved != null && saved.IsConnected && saved.EncryptedRefreshToken != null)
-                {
-                    // Restaurer le compte (jeton déchiffré avec DPAPI)
-                    var refreshToken = DpapiHelper.Decrypt(saved.EncryptedRefreshToken);
-                    if (refreshToken != null)
-                    {
-                        _cloudAccount = saved with { };
-                        _cloudAccessToken = null; // sera obtenu par refresh au premier usage
-                        // Tenter un refresh silencieux pour obtenir un access token
-                        _ = Task.Run(async () =>
-                        {
-                            try
-                            {
-                                var result = await _cloudClient.RefreshAsync("", refreshToken, default);
-                                if (result != null && !result.IsOffline && result.AccessToken != null)
-                                {
-                                    _cloudAccessToken = result.AccessToken;
-                                    Dispatcher.Invoke(() => { UpdateCloudButton(); UpdateTitle(); });
-                                }
-                            }
-                            catch { /* serveur indisponible : reste hors-ligne */ }
-                        });
-                    }
-                }
-            }
-        }
-        catch { /* compte ignoré si illisible */ }
-    }
-
-    private void UpdateCloudButton()
-    {
-        BtnCloud.IsChecked = _cloudAccount.IsConnected;
-        BtnCloud.ToolTip = _cloudAccount.IsConnected
-            ? $"Connecté ({_cloudAccount.Email}) — Fermer la session"
-            : "Espace cloud GreenBoard — Se connecter";
-    }
-
-    private async void Cloud_Click(object sender, RoutedEventArgs e)
-    {
-        ReleaseSpace();
-
-        if (!_cloudAccount.IsConnected)
-        {
-            var dialog = new Views.AccountWindow(_cloudClient, _cloudAccount) { Owner = this };
-            if (dialog.ShowDialog() == true)
-            {
-                // Recharger le compte depuis le fichier (sauvegardé par AccountWindow)
-                LoadCloudAccount();
-                UpdateCloudButton();
-                UpdateTitle();
-            }
-            return;
-        }
-
-        // Déjà connecté : afficher les tableaux en ligne
-        var boardsWindow = new Views.OnlineBoardsWindow(_cloudClient, _cloudAccount, (data, title) =>
-        {
-            // Ouvrir le document .gboard téléchargé
-            try
-            {
-                var doc = BoardFile.LoadFromBytes(data);
-                LoadDocument(doc, null);
-                _currentFile = null; // fichier cloud : pas de chemin local
-                _dirty = false;
-                UpdateTitle();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(this, $"Impossible d'ouvrir le tableau :\n{ex.Message}", AppName,
-                    MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        });
-        boardsWindow.SetAccessToken(_cloudAccessToken ?? "");
-        var result = boardsWindow.ShowDialog();
-        if (result == false)
-        {
-            // Déconnexion demandée
-            _cloudAccount = CloudAccount.Disconnected();
-            _cloudAccessToken = null;
-            try { File.Delete(CloudAccountPath.Default); } catch { }
-            UpdateCloudButton();
-            UpdateTitle();
-        }
-    }
-
-    private async Task SaveToCloudAsync()
-    {
-        if (!_cloudAccount.IsConnected)
-        {
-            MessageBox.Show(this, "Veuillez vous connecter à votre compte GreenBoard Cloud d'abord.",
-                AppName, MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        var pages = BuildExportPages();
-        int active = _pages.IndexOf(Page);
-        if (pages.All(p => p.IsEmpty))
-        {
-            MessageBox.Show(this, "Le tableau est vide : rien à enregistrer.", AppName,
-                MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        string boardName = _currentFile == null ? Page.Title : Path.GetFileNameWithoutExtension(_currentFile);
-        var nameDialog = new NameInputDialog(boardName) { Owner = this };
-        if (nameDialog.ShowDialog() != true || string.IsNullOrWhiteSpace(nameDialog.DialogName)) return;
-        boardName = nameDialog.DialogName;
-
-        try
-        {
-            Mouse.OverrideCursor = Cursors.Wait;
-            var docBytes = BoardFile.SerializeToBytes(Snapshot());
-            var result = await _cloudClient.UploadDocumentAsync(_cloudAccessToken ?? "", boardName, docBytes, pages.Count, default);
-            if (result != null)
-            {
-                MessageBox.Show(this, $"Tableau « {boardName} » enregistré dans votre espace cloud.",
-                    AppName, MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            else
-            {
-                MessageBox.Show(this, "Échec de l'enregistrement dans le cloud (serveur indisponible).",
-                    AppName, MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, $"Erreur : {ex.Message}", AppName,
-                MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-        finally
-        {
-            Mouse.OverrideCursor = null;
-        }
     }
 
     /// <summary>Enregistre en silence un tableau qui a déjà un fichier, hors geste en cours.</summary>
@@ -514,7 +357,6 @@ public partial class MainWindow : Window
                 case Key.Z: _history.Redo(); e.Handled = true; break; // Ctrl+Maj+Z = Rétablir
                 case Key.S: SaveAs(); e.Handled = true; break;
                 case Key.E: _ = ShareBoardAsync(); e.Handled = true; break;
-                case Key.U: _ = SaveToCloudAsync(); e.Handled = true; break;
                 case Key.Tab: CyclePage(-1); e.Handled = true; break;
             }
             return;
@@ -1398,8 +1240,7 @@ public partial class MainWindow : Window
     private void UpdateTitle()
     {
         string name = _currentFile == null ? "Sans titre" : Path.GetFileNameWithoutExtension(_currentFile);
-        string cloudSuffix = _cloudAccount.IsConnected ? " ☁" : "";
-        Title = $"{name}{(_dirty ? " •" : "")}{cloudSuffix} — {AppName}";
+        Title = $"{name}{(_dirty ? " •" : "")} — {AppName}";
     }
 
     private static IEnumerable<Image> ItemsOf(IEnumerable<UIElement> elements) =>
@@ -1601,28 +1442,22 @@ public partial class MainWindow : Window
 
         MailShare.SaveRecentRecipients(request.Recipients);
 
-        // 2. Nouveau message dans la messagerie (Simple MAPI). Appel bloquant chez certains clients
-        //    tant que la fenêtre de rédaction est ouverte : thread STA dédié pour garder GreenBoard réactif.
-        var outcome = await RunOnStaThread(() => MailShare.ComposeWithMailClient(request, pdfPath, out _));
-
-        // 3. Repli : mailto (destinataires, objet, texte) + dossier du PDF pour le glisser dans le message
-        if (outcome == MailShare.MapiOutcome.Unavailable)
+        // Ouvrir le message dans la messagerie par défaut (mailto:) et afficher le dossier du PDF
+        try
         {
-            try
-            {
-                MailShare.OpenMailtoAndRevealFile(request, pdfPath);
-                MessageBox.Show(this,
-                    "Votre messagerie ne permet pas de joindre le fichier automatiquement.\n\n" +
-                    "Un nouveau message a été ouvert avec les destinataires et l'objet, et le dossier contenant " +
-                    $"« {Path.GetFileName(pdfPath)} » est affiché : glissez simplement le PDF dans le message.",
-                    AppName, MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(this,
-                    $"Aucune messagerie n'a pu être ouverte ({ex.Message}).\nLe PDF est prêt ici :\n{pdfPath}",
-                    AppName, MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
+            MailShare.OpenMailAndRevealFile(request, pdfPath);
+            MessageBox.Show(this,
+                "Nouveau message ouvert dans votre messagerie par défaut.\n\n" +
+                "Le chemin du PDF a été copié dans le presse-papier et le dossier contenant le fichier est affiché :\n" +
+                $"« {Path.GetFileName(pdfPath)} »\n\n" +
+                "Glissez simplement le PDF dans votre message comme pièce jointe.",
+                AppName, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this,
+                $"Aucune messagerie n'a pu être ouverte ({ex.Message}).\nLe PDF est prêt ici :\n{pdfPath}",
+                AppName, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 

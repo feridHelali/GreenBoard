@@ -128,15 +128,6 @@
                            Text="Claude, OpenCode (gratuit) ou tout assistant MCP peut dessiner vos illustrations de cours sur le tableau."/>
             </DockPanel>
 
-            <!-- Compte GreenBoard Cloud -->
-            <TextBlock Text="Compte GreenBoard Cloud" Style="{StaticResource DialogSection}"/>
-            <DockPanel Margin="0,4,0,0">
-                <Button DockPanel.Dock="Right" x:Name="AccountButton" Content="Se connecter" Style="{StaticResource DialogButtonStyle}"
-                        Click="Account_Click"/>
-                <TextBlock x:Name="AccountStatus" Style="{StaticResource DialogHint}" VerticalAlignment="Center"
-                           Text="Non connecté — GreenBoard reste 100 % local."/>
-            </DockPanel>
-
             <!-- Actions -->
             <DockPanel Margin="0,24,0,0" LastChildFill="False">
                 <Button DockPanel.Dock="Left" Content="Valeurs par défaut" Style="{StaticResource DialogButtonStyle}" Margin="0"
